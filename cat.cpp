@@ -9,6 +9,7 @@ enum {
     ECOK,
     ECHELLO,
     ECNOSLOT,
+    ECSERVER,
 };
 
 MAIN() {
@@ -29,6 +30,7 @@ MAIN() {
     for (;;) {
         POLL(rc, poll, &pfd, 1, -1);
         nr = (int) read(clientfd, buf, LOGMSGLEN);
+        UNEXPECT(nr == 0, ECSERVER);
         CONTINUEIF(nr == -1 && (errno == EAGAIN || errno == EINTR));
         printf("%*s\n", nr, buf);
     }
