@@ -14,12 +14,14 @@
 class IdMgr {
 #define IDMAXLEN 64
 public:
-    IdMgr() : x_(0) {}
+    IdMgr() : x_(0), c_(0) {}
 
     int get() {
+        UNEXPECT(c_ == IDMAXLEN, -1);
         for (u64 i = 0, m; i < IDMAXLEN; i++) {
             m = 1UL << i;
             if (!(x_ & m)) {
+                c_++;
                 x_ |= m;
                 return (int) i;
             }
@@ -29,12 +31,16 @@ public:
 
     void put(int i) {
         if (i >= 0 && i < IDMAXLEN) {
+            c_--;
             x_ &= ~(1UL << i);
         }
     }
 
+    int count() const { return c_; }
+
 private:
     u64 x_;
+    int c_;
 };
 
 static const char *loglevelstr(int level) {
@@ -87,7 +93,7 @@ public:
     }
 
     void deletesub(int fd) {
-        LOGWARN("drop sub(%d)", fd);
+        LOGWARN("drop sub(#%d)", fd);
         int i = m_[fd];
         im_.put(i);
         es_[i]->flag = ENTRYFREE;
@@ -139,12 +145,19 @@ public:
     }
 
     void deletepub(int fd) {
-        LOGWARN("drop pub(%d)", fd);
+        LOGWARN("drop pub(#%d)", fd);
         im_.put(m_[fd]);
         close(fd);
     }
 
     void pubmsg(int fd, MsgLog *ml, char msgbuf[LOGMSGLEN]/*large enough*/, SubMgr *sm) {
+        int c1, c2, c3;
+        c1 = sm->im_.count();
+        if (!c1) {
+            LOGINFO("no sub, drop msg");
+            return;
+        }
+        c2 = c1, c3 = 0;
         auto &&e = es_[m_[fd]];
         int n = sprintf(msgbuf, "%d.%06d %d#%d %*s %s %*s",
                         ml->sec, ml->us,
@@ -152,13 +165,15 @@ public:
                         e->len, PUBENTRYSTR(e),
                         loglevelstr(ml->level),
                         ml->len, MSGLOGSTR(ml));
-        for (int i = 0; i < IDMAXLEN; i++) {
-            auto t = sm->es_[i];
+        for (auto t : sm->es_) {
             if (t && (t->flag & ENTRYBUSY) &&
-                (({ LOGDEBUG("pub(%d) msg(%d) to sub(%d)", fd, n, t->fd); }), write(t->fd, msgbuf, n) != n)) {
+                (/*({ LOGDEBUG("pub(%d) msg(%d) to sub(%d)", fd, n, t->fd); }),*/c2--, write(t->fd, msgbuf, n) != n)) {
+                c3++;
                 sm->deletesub(t->fd);
             }
+            BREAKIF(!c2);
         }
+        LOGINFO("pub(#%d) post summarize: %d success, %d failure", fd, c1 - c3, c3);
     }
 
 private:
@@ -199,7 +214,7 @@ static bool readmsg(int fd, int hdrlen, char *buf, int buflen/*not sure*/) {
     buflen -= hdrlen;
     defer op;
     if (msglen > buflen) {
-        LOGWARN("truncate message");
+        LOGWARN("truncate msg");
         op = defer([&] {
             int left = msglen - buflen;
             msglen = buflen;
@@ -290,7 +305,7 @@ MAIN() {
                     pm.pubmsg(pfd.fd, ml, msgbuf, &sm);
                     i++;
                 } else {
-                    LOGDEBUG("pub(%d) may quit", pfd.fd);
+                    LOGDEBUG("pub(#%d) may quit", pfd.fd);
                     pm.deletepub(pfd.fd);
                     np--;
                     if (i != np) {
