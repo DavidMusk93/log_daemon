@@ -14,4 +14,3 @@ cmake-build-debug
 BUILD
 .idea
 .vscode
-3rdparty/
