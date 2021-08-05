@@ -306,14 +306,7 @@ MAIN() {
                 } else {
                     LOGDEBUG("pub(#%d) may quit", pfd.fd);
                     pm.deletepub(pfd.fd);
-                    np--;
-                    if (i != np) {
-//                        auto t = sp[i];
-//                        sp[i] = sp[np];
-//                        sp[np] = t;
-                        sp[i] = sp[np];
-                    }
-                    i--;
+                    sp[i--] = sp[--np];
                 }
                 BREAKIF(!rc);
             }
