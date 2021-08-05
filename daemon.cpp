@@ -296,23 +296,24 @@ MAIN() {
             write(peerfd, &res, sizeof(res));
             CONTINUEIF(!rc);
         }
-        for (int i = 0; i < np;) {
+        for (int i = 0; i < np; i++) {
             auto &pfd = sp[i];
             if (pfd.revents & (POLLIN | POLLNVAL)) { /*ready or error*/
                 rc--;
                 if ((pfd.revents & POLLIN) && readmsg(pfd.fd, sizeof(MsgLog), buf, LOGBUFLEN)) {
 //                    LOGDEBUG("pub(%d) recv success", pfd.fd);
                     pm.pubmsg(pfd.fd, ml, msgbuf, &sm);
-                    i++;
                 } else {
                     LOGDEBUG("pub(#%d) may quit", pfd.fd);
                     pm.deletepub(pfd.fd);
                     np--;
                     if (i != np) {
-                        auto t = sp[i];
+//                        auto t = sp[i];
+//                        sp[i] = sp[np];
+//                        sp[np] = t;
                         sp[i] = sp[np];
-                        sp[np] = t;
                     }
+                    i--;
                 }
                 BREAKIF(!rc);
             }
