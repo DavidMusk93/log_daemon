@@ -1,33 +1,26 @@
-#ifndef LOG_DAEMON_MSG_H
-#define LOG_DAEMON_MSG_H
+#pragma once
 
 enum {
-    LOGPEERPUB,
-    LOGPEERSUB,
+    LOG_ROLE_PUB,
+    LOG_ROLE_SUB,
 };
 
-struct MsgStr {
+typedef struct {
     int len;
-};
+    int pid: 28;
+    int role: 4;
+    char tag[];
+} msgReqInit;
 
-struct MsgReqHello : MsgStr {
-    int type;
-    int pid;
-//    char *tag;
-#define MSGREQSTR(p) ((char*)(p)+sizeof(MsgReqHello))
-};
-
-struct MsgResHello {
+typedef struct {
     int status;
-};
+} msgResInit;
 
-struct MsgLog : MsgStr {
-    int sec;
-    int us;
-    int tid;
-    int level;
-//    char *msg;
-#define MSGLOGSTR(p) ((char*)(p)+sizeof(MsgLog))
-};
-
-#endif //LOG_DAEMON_MSG_H
+typedef struct {
+    int len;
+    unsigned sec;
+    unsigned us;
+    int tid: 28;
+    int level: 4;
+    char data[];
+} msgLog;

@@ -1,4 +1,0 @@
-[submodule "3rdparty/c-playground"]
-	path = 3rdparty/c-playground
-	url = https://github.com/DavidMusk93/c-playground.git
-	branch = feature

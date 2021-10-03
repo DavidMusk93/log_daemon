@@ -8,19 +8,14 @@
 #define LOGMSGRECVTO 500 /*milliseconds*/
 #define LOGRECVMAXRETRY 3
 
-namespace log {
-
 enum {
-    LOGLEVELDEBUG,
-    LOGLEVELINFO,
-    LOGLEVELWARN,
-    LOGLEVELERROR,
+    LOG_LEVEL_DEBUG,
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_WARN,
+    LOG_LEVEL_ERROR,
 };
 
-int hello(const char *tag);
-
-bool post(int level, const char *fmt, ...);
-
-}
+int logInit(const char *tag);
+int logPost(int level, const char *fmt, ...);
 
 #endif //LOG_DAEMON_LOG_H
