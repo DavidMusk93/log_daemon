@@ -7,6 +7,7 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/poll.h>
+#include <stdlib.h>
 
 #include "macro.h"
 
@@ -18,6 +19,13 @@ void closeFd(void *arg) {
 void closeFp(void *arg) {
     FILE *fp = *(FILE **) arg;
     if (fp) fclose(fp);
+}
+
+void freePointer(void *arg) {
+    void *ptr = *(void **) arg;
+    if (ptr) {
+        free(ptr);
+    }
 }
 
 static int processId;

@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #include "log.h"
 #include "msg.h"
@@ -19,29 +20,33 @@ enum {
 #define CLIENT_READ_MAX_RETRY 5
 
 _main() {
-    char buf[LOGMSGLEN];
+    const int recvBufSize = 16 * 1024 * 1024;
+    char *recvBuf attrScopeGuard(freePointer) = malloc(recvBufSize);
     int charCount, rc = -1;
     int readRetry = 0;
-    autoFd(clientfd);
-    unixStreamClient(rc, clientfd, LOGIPC);
 
-    if (rc == -1) return CAT_ERROR_INIT;
+    autoFd(clientFd);
+    unixStreamClient(rc, clientFd, LOGIPC);
+    if (rc == -1)
+        return CAT_ERROR_INIT;
+    setsockopt(clientFd, SOL_SOCKET, SO_RCVBUF, &recvBufSize, sizeof(recvBufSize));
+
     msgReqInit req = {0};
     msgResInit res = {-1};
     req.role = LOG_ROLE_SUB;
-    write(clientfd, &req, sizeof(req));
-    read(clientfd, &res, sizeof(res));
+    write(clientFd, &req, sizeof(req));
+    read(clientFd, &res, sizeof(res));
     if (res.status == -1) return CAT_ERROR_NOSLOT;
-    log1("Connect success #%d, start loop", clientfd);
+    log1("Connect success #%d, start loop", clientFd);
     alwaysFlushOutput();
-    struct pollfd pfd = {.fd=clientfd, .events=POLLIN};
+    struct pollfd pfd = {.fd=clientFd, .events=POLLIN};
 
     for (;;) {
         _poll(rc, poll, &pfd, 1, -1);
         if (pfd.revents & (POLLERR | POLLNVAL)) break;
-        charCount = (int) read(clientfd, buf, LOGMSGLEN);
+        charCount = (int) read(clientFd, recvBuf, recvBufSize);
         if (charCount == 0) {
-            if (readRetry++ < CLIENT_READ_MAX_RETRY) {
+            if (readRetry++ < CLIENT_READ_MAX_RETRY) { /* may be trivial? */
                 sleepMs(readRetry * 200);
                 continue;
             }
@@ -53,7 +58,7 @@ _main() {
             break;
         }
         /* The message maybe merged, the log daemon will control the newline. */
-        printf("%.*s", charCount, buf);
+        printf("%.*s", charCount, recvBuf);
     }
     return CAT_OK;
 }

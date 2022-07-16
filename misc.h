@@ -3,6 +3,7 @@
 
 void closeFd(void *arg);
 void closeFp(void *arg);
+void freePointer(void *arg);
 
 int myPid();
 int myTid();
