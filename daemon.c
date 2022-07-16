@@ -82,6 +82,7 @@ enum {
 _main() {
     signal(SIGPIPE, SIG_IGN);
     int i, n, rc = -1;
+    const int subscriberSendBufSize = 16 * 1024 * 1024;
     autoFd(serverfd);
     autoFd(epollfd);
     struct epoll_event events[DAEMON_MAX_EVENTS], ev;
@@ -108,24 +109,25 @@ _main() {
         for (i = 0; i < rc; i++) {
             int fd = ((pubEntry *) events[i].data.ptr)->fd;
             if (fd == serverfd) {
-                autoFd(peerfd);
-                peerfd = accept4(fd, 0, 0, O_NONBLOCK);
-                if (peerfd == -1) return DAEMON_ERROR_ACCEPT;
-                if (!limitRead(peerfd, sizeof(msgReqInit), buf, LOGBUFLEN)) {
+                autoFd(peerFd);
+                peerFd = accept4(fd, 0, 0, O_NONBLOCK);
+                if (peerFd == -1) return DAEMON_ERROR_ACCEPT;
+                if (!limitRead(peerFd, sizeof(msgReqInit), buf, LOGBUFLEN)) {
                     log2("Error occurs on peer init");
                     continue;
                 }
                 if (reqinit->role == LOG_ROLE_PUB) {
-                    ev.data.ptr = pmNewPub(&pm, peerfd, reqinit);
-                    epoll_ctl(epollfd, EPOLL_CTL_ADD, peerfd, &ev);
-                    log1("New publisher #%d", peerfd);
+                    ev.data.ptr = pmNewPub(&pm, peerFd, reqinit);
+                    epoll_ctl(epollfd, EPOLL_CTL_ADD, peerFd, &ev);
+                    log1("New publisher #%d", peerFd);
                 } else if (reqinit->role == LOG_ROLE_SUB) {
-                    pmNewSub(&pm, peerfd);
-                    log1("New subscriber #%d", peerfd);
+                    pmNewSub(&pm, peerFd);
+                    log1("New subscriber #%d", peerFd);
+                    setsockopt(peerFd, SOL_SOCKET, SO_SNDBUF, &subscriberSendBufSize, sizeof(subscriberSendBufSize));
                 }
                 msgResInit resinit = {0};
-                write(peerfd, &resinit, sizeof resinit);
-                peerfd = -1;
+                write(peerFd, &resinit, sizeof resinit);
+                peerFd = -1;
             } else {
                 pubEntry *entry = events[i].data.ptr;
                 if (events[i].events & (EPOLLERR | EPOLLHUP) || !limitRead(fd, sizeof(msgLog), buf, LOGBUFLEN)) {
