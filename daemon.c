@@ -77,19 +77,21 @@ enum {
 };
 
 #define DAEMON_MAX_EVENTS 1024
+#define LOG_FMT "%u.%06u %d#%d %.*s %s %.*s"
 
 _main() {
     signal(SIGPIPE, SIG_IGN);
-    int i, rc = -1;
+    int i, n, rc = -1;
     autoFd(serverfd);
     autoFd(epollfd);
     struct epoll_event events[DAEMON_MAX_EVENTS], ev;
     peerManager pm;
-    char buf[LOGBUFLEN];
+    _attr(aligned(8)) char buf[LOGBUFLEN];
     char msgbuf[LOGMSGLEN];
     msgReqInit *reqinit = (msgReqInit *) buf;
     msgLog *log = (msgLog *) buf;
     pubEntry se;
+    const char *logFmt;
 
     unixStreamServer(rc, serverfd, LOGIPC);
     if (rc == -1) return DAEMON_ERROR_SERVER;
@@ -130,12 +132,13 @@ _main() {
                     pmFreePub(&pm, entry);
                     log1("Publisher #%d leave", fd);
                 } else {
-                    int n = sprintf(msgbuf, "%u.%06u %d#%d %*s %s %*s",
-                                    log->sec, log->us,
-                                    entry->pid, log->tid,
-                                    entry->len, entry->tag,
-                                    logLevel2String(log->level),
-                                    log->len, log->data);
+                    logFmt = log->data[log->len - 1] == '\n' ? LOG_FMT : LOG_FMT "\n";
+                    n = sprintf(msgbuf, logFmt,
+                                log->sec, log->us,
+                                entry->pid, log->tid,
+                                entry->len, entry->tag,
+                                logLevel2String(log->level),
+                                log->len, log->data);
                     pmPost(&pm, msgbuf, n);
                 }
             }

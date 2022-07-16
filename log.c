@@ -52,7 +52,7 @@ int logPost(int level, const char *fmt, ...) {
     n += sizeof(*log);
     if (n > LOGBUFLEN) n = LOGBUFLEN;
     log->len = n - (int) sizeof(*log);
-    if (write(clientfd, buf, n) == n) return 1;
+    if (write(clientfd, buf, n) == n) /* make sure atomic write */ return 1;
     clientfd = STDOUT_FILENO;
     fprintf(stdout, "%.*s", log->len, log->data);
     return 0;

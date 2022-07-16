@@ -41,7 +41,8 @@ _main() {
             if (errno == EAGAIN || errno == EINTR) continue;
             break;
         }
-        printf("%*s\n", nr, buf);
+        /* The message maybe merged, the log daemon will control the newline. */
+        printf("%.*s", nr, buf);
     }
     return CAT_OK;
 }
