@@ -11,8 +11,8 @@
 #include "misc.h"
 #include "macro.h"
 
-static __thread char buf[LOGMSGLEN];
-static int clientfd = STDOUT_FILENO;
+static __thread char sendBuf[LOGMSGLEN];
+static __thread int clientFd = STDOUT_FILENO;
 
 int logInit(const char *tag) {
     int rc = -1;
@@ -21,16 +21,16 @@ int logInit(const char *tag) {
     if (rc == -1) return 0;
 
     int len = (int) strlen(tag);
-    msgReqInit *reqptr = (msgReqInit *) buf;
+    msgReqInit *reqptr = (msgReqInit *) sendBuf;
     msgResInit res = {-1};
     reqptr->pid = myPid();
     reqptr->role = LOG_ROLE_PUB;
     reqptr->len = len;
     memcpy(reqptr->tag, tag, len);
-    write(fd, buf, sizeof(*reqptr) + len);
+    write(fd, sendBuf, sizeof(*reqptr) + len);
     read(fd, &res, sizeof(res));
     if (res.status != 0) return 0;
-    clientfd = fd;
+    clientFd = fd;
     fd = -1;
     return 1;
 }
@@ -38,12 +38,12 @@ int logInit(const char *tag) {
 int logPost(int level, const char *fmt, ...) {
     va_list va;
     va_start(va, fmt);
-    if (clientfd == STDOUT_FILENO) {
+    if (clientFd == STDOUT_FILENO) {
         vfprintf(stdout, fmt, va);
         va_end(va);
         return 0;
     }
-    msgLog *log = (msgLog *) buf;
+    msgLog *log = (msgLog *) sendBuf;
     now(&log->sec, &log->us);
     log->tid = myTid();
     log->level = level;
@@ -52,8 +52,8 @@ int logPost(int level, const char *fmt, ...) {
     n += sizeof(*log);
     if (n > LOGBUFLEN) n = LOGBUFLEN;
     log->len = n - (int) sizeof(*log);
-    if (write(clientfd, buf, n) == n) /* make sure atomic write */ return 1;
-    clientfd = STDOUT_FILENO;
+    if (write(clientFd, sendBuf, n) == n) /* make sure atomic write */ return 1;
+    clientFd = STDOUT_FILENO;
     fprintf(stdout, "%.*s", log->len, log->data);
     return 0;
 }

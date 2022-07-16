@@ -5,18 +5,18 @@ enum {
     LOG_ROLE_SUB,
 };
 
-typedef struct {
+typedef struct initLogRequest {
     int len;
     int pid: 28;
     int role: 4;
     char tag[];
 } msgReqInit;
 
-typedef struct {
+typedef struct initLogResponse {
     int status;
 } msgResInit;
 
-typedef struct {
+typedef struct logMessage {
     int len;
     unsigned sec;
     unsigned us;
