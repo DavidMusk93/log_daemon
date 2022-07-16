@@ -7,6 +7,8 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 
+#include "macro.h"
+
 void closeFd(void *arg) {
     int fd = *(int *) arg;
     if (fd != -1) close(fd);
@@ -17,20 +19,22 @@ void closeFp(void *arg) {
     if (fp) fclose(fp);
 }
 
+static int processId;
+static __thread int threadId;
+
+static attrCtor void initGlobalVariables() {
+    processId = getpid();
+}
+
 int myPid() {
-    static int pid;
-    if (!pid) {
-        pid = getpid();
-    }
-    return pid;
+    return processId;
 }
 
 int myTid() {
-    static __thread int tid;
-    if (!tid) {
-        tid = (int) syscall(__NR_gettid);
+    if (!threadId) {
+        threadId = (int) syscall(__NR_gettid);
     }
-    return tid;
+    return threadId;
 }
 
 void now(unsigned *secptr, unsigned *usptr) {
