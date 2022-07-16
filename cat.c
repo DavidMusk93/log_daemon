@@ -16,12 +16,15 @@ enum {
     CAT_ERROR_NOSLOT,
     CAT_ERROR_SERVER,
 };
+#define CLIENT_READ_MAX_RETRY 5
 
 _main() {
     char buf[LOGMSGLEN];
-    int nr, rc = -1;
+    int charCount, rc = -1;
+    int readRetry = 0;
     autoFd(clientfd);
     unixStreamClient(rc, clientfd, LOGIPC);
+
     if (rc == -1) return CAT_ERROR_INIT;
     msgReqInit req = {0};
     msgResInit res = {-1};
@@ -32,17 +35,25 @@ _main() {
     log1("Connect success #%d, start loop", clientfd);
     alwaysFlushOutput();
     struct pollfd pfd = {.fd=clientfd, .events=POLLIN};
+
     for (;;) {
         _poll(rc, poll, &pfd, 1, -1);
         if (pfd.revents & (POLLERR | POLLNVAL)) break;
-        nr = (int) read(clientfd, buf, LOGMSGLEN);
-        if (nr == 0) return CAT_ERROR_SERVER;
-        if (nr == -1) {
+        charCount = (int) read(clientfd, buf, LOGMSGLEN);
+        if (charCount == 0) {
+            if (readRetry++ < CLIENT_READ_MAX_RETRY) {
+                sleepMs(readRetry * 200);
+                continue;
+            }
+            return CAT_ERROR_SERVER;
+        }
+        readRetry = 0;
+        if (charCount == -1) {
             if (errno == EAGAIN || errno == EINTR) continue;
             break;
         }
         /* The message maybe merged, the log daemon will control the newline. */
-        printf("%.*s", nr, buf);
+        printf("%.*s", charCount, buf);
     }
     return CAT_OK;
 }

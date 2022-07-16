@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
+#include <sys/poll.h>
 
 #include "macro.h"
 
@@ -42,4 +43,8 @@ void now(unsigned *secptr, unsigned *usptr) {
     gettimeofday(&tv, 0);
     *secptr = tv.tv_sec;
     *usptr = tv.tv_usec;
+}
+
+int sleepMs(int ms) {
+    return poll(NULL, 0, ms);
 }

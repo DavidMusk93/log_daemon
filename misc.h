@@ -9,4 +9,6 @@ int myTid();
 
 void now(unsigned *secptr, unsigned *usptr);
 
+int sleepMs(int ms);
+
 #endif //LOGDAEMON_MISC_H
