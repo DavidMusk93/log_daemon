@@ -3,6 +3,43 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MIN_BASEEXP2 3
+#define MAX_BASEEXP2 15
+
+ringArray *newRingArray(uint32 baseExp2) {
+    uint32 itemCount;
+    if (baseExp2 < MIN_BASEEXP2)
+        baseExp2 = MIN_BASEEXP2;
+    if (baseExp2 > MAX_BASEEXP2)
+        baseExp2 = MAX_BASEEXP2;
+    itemCount = 1 << baseExp2;
+    ringArray *r = malloc(sizeof(*r) + sizeof(void *) * itemCount);
+    r->total = itemCount;
+    r->mask = itemCount - 1;
+    r->indexProduce = 0;
+    r->indexConsume = 0;
+    return r;
+}
+
+void freeRingArray(ringArray *ring) {
+    free(ring);
+}
+
+int pushRingArray(ringArray *ring, void *item) {
+    ring->data[ring->indexProduce++ & ring->mask] = item;
+    return 0;
+}
+
+void *popRingArray(ringArray *ring) {
+    if (ring->indexConsume == ring->indexProduce) {
+        return NULL;
+    }
+    if (ring->indexConsume + ring->total <= ring->indexProduce) {
+        ring->indexConsume = ring->indexProduce - ring->total;
+    }
+    return ring->data[ring->indexConsume++ & ring->mask];
+}
+
 void arrayInit(array *o) {
     o->a = o->static_items;
     o->i = 0;

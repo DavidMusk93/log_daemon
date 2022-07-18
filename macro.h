@@ -25,6 +25,7 @@ if (rc<0){\
     break;\
 }
 
+#define dimensionOf(a) (int)(sizeof(a)/sizeof(*a))
 #define offsetOf(type, field) (size_t)(&((type*)0)->field)
 #define sockAddrEx(x) (struct sockaddr*)&x,sizeof x
 

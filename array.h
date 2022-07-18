@@ -4,6 +4,7 @@
 #define ARRAY_NUM_STATIC_ITEMS 32
 
 typedef int (*compare)(const void *, const void *);
+typedef unsigned uint32;
 
 #define ARRAY_ELEMENTS(a, i, n) \
 void **a;\
@@ -23,6 +24,19 @@ typedef struct {
     array *array;
     unsigned i;
 } arrayIterator;
+
+typedef struct ringArray {
+    uint32 total;
+    uint32 mask;
+    uint32 indexProduce;
+    uint32 indexConsume;
+    void *data[];
+} ringArray;
+
+ringArray *newRingArray(uint32 baseExp2);
+void freeRingArray(ringArray *ring);
+int pushRingArray(ringArray *ring, void *item);
+void *popRingArray(ringArray *ring);
 
 void arrayInit(array *o);
 void arrayFree(array *o);

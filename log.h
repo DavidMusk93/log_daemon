@@ -18,4 +18,7 @@ enum {
 int logInit(const char *tag);
 int logPost(int level, const char *fmt, ...);
 
+#define _postLogDetailed(level, fmt, ...) logPost(level,"%s:%d " fmt "\n",__FILE__,__LINE__,##__VA_ARGS__)
+#define logInfo(...) _postLogDetailed(LOG_LEVEL_INFO,__VA_ARGS__)
+
 #endif //LOG_DAEMON_LOG_H

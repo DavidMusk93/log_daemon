@@ -16,3 +16,11 @@ target_link_libraries(log)
 
 add_executable(logtest test.c)
 target_link_libraries(logtest log)
+
+enable_testing()
+
+add_executable(queue_test queue_test.c queue.h)
+add_test(NAME queue_test COMMAND queue_test)
+
+add_executable(ring_test ring_test.c array.c)
+add_test(NAME ring_test COMMAND ring_test)
