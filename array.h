@@ -11,16 +11,16 @@ void **a;\
 unsigned i,n;\
 void *static_items[ARRAY_NUM_STATIC_ITEMS]
 
-typedef struct {
+typedef struct array {
     ARRAY_ELEMENTS(a, i, n);
 } array;
 
-typedef struct {
+typedef struct sortArray {
     ARRAY_ELEMENTS(a, i, n);
     compare cmp;
 } sortArray;
 
-typedef struct {
+typedef struct arrayIterator {
     array *array;
     unsigned i;
 } arrayIterator;

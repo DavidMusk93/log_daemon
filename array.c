@@ -34,6 +34,7 @@ void *popRingArray(ringArray *ring) {
     if (ring->indexConsume == ring->indexProduce) {
         return NULL;
     }
+    /* TODO: fix indexConsume<(uint32)-1, indexProduce>0 */
     if (ring->indexConsume + ring->total <= ring->indexProduce) {
         ring->indexConsume = ring->indexProduce - ring->total;
     }

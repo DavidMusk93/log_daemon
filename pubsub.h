@@ -4,12 +4,16 @@
 #include "msg.h"
 #include "array.h"
 
-typedef struct {
+#define MAX_FAIL_COUNT 3
+#define RING_BASEEXP2 4
+
+typedef struct subEntry {
     int fd;
+    int failCount;
     void **interests;
 } subEntry;
 
-typedef struct {
+typedef struct pubEntry {
     int fd;
     int pid;
     int len: 31;
@@ -17,11 +21,17 @@ typedef struct {
     char tag[];
 } pubEntry;
 
-typedef struct {
-    array substack;
-    array publist;
-    sortArray subentries;
+typedef struct peerManager {
+    array subStack;
+    array pubList;
+    sortArray subEntries;
+    ringArray *ring;
 } peerManager;
+
+struct message {
+    int len;
+    char *data;
+};
 
 void pmInit(peerManager *o);
 void pmFree(peerManager *o);
