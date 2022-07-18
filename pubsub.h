@@ -30,7 +30,7 @@ typedef struct peerManager {
 
 struct message {
     int len;
-    char *data;
+    char data[];
 };
 
 void pmInit(peerManager *o);

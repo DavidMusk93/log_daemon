@@ -93,6 +93,7 @@ void pmPost(peerManager *o, const char *msg, int len) {
 
     if (!arraySize(&o->subEntries)) {
         log1("No subscribers, push message to ring.");
+        /* TODO: reuse memory for message */
         p = malloc(sizeof(*p) + len);
         p->len = len;
         memcpy(p->data, msg, len);
