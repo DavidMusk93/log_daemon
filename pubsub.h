@@ -3,9 +3,11 @@
 
 #include "msg.h"
 #include "array.h"
+#include "queue.h"
 
 #define MAX_FAIL_COUNT 3
-#define RING_BASEEXP2 4
+#define RING_BASEEXP2  4
+#define PAGE_SIZE      4096
 
 typedef struct subEntry {
     int fd;
@@ -22,23 +24,26 @@ typedef struct pubEntry {
 } pubEntry;
 
 typedef struct peerManager {
-    array subStack;
+    array freeSubList;
+    sortArray activeSubList;
     array pubList;
-    sortArray subEntries;
-    ringArray *ring;
+    ringArray *ringCache;
+    queueEntry freeMessageQueue;
+    void *messageBuffer;
 } peerManager;
 
 struct message {
+    queueEntry link;
     int len;
     char data[];
 };
 
-void pmInit(peerManager *o);
-void pmFree(peerManager *o);
-int pmNewSub(peerManager *o, int fd);
-void pmFreeSub(peerManager *o, subEntry *e);
-pubEntry *pmNewPub(peerManager *o, int fd, msgReqInit *req);
-void pmFreePub(peerManager *o, pubEntry *e);
-void pmPost(peerManager *o, const char *msg, int len);
+void initPeerManager(peerManager *o);
+void freePeerManager(peerManager *o);
+int newSub(peerManager *o, int fd);
+void freeSub(peerManager *o, subEntry *e);
+pubEntry *newPub(peerManager *o, int fd, msgReqInit *req);
+void freePub(peerManager *o, pubEntry *e);
+void postMessage(peerManager *o, const char *msg, int len);
 
 #endif //LOGD_PUBSUB_H

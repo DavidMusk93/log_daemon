@@ -31,7 +31,7 @@ removeQueueEntry(_e)
 
 #define removeQueueEntry(_e) \
 refNextQueueEntry(prevQueueEntry(_e))=nextQueueEntry(_e);\
-refPrevQueueEntry(nextQueueEntry(_e))=prevQueeuEntry(_e)
+refPrevQueueEntry(nextQueueEntry(_e))=prevQueueEntry(_e)
 
 #define foreachQueue(_h, _i) \
 for(queueEntry*_i=nextQueueEntry(_h);_i!=(_h);_i=nextQueueEntry(_i))

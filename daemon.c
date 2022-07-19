@@ -102,7 +102,7 @@ _main() {
     ev.data.ptr = &se;
     ev.events = EPOLLIN;
     epoll_ctl(epollfd, EPOLL_CTL_ADD, serverfd, &ev);
-    pmInit(&pm);
+    initPeerManager(&pm);
 
     for (;;) {
         _poll(rc, epoll_wait, epollfd, events, DAEMON_MAX_EVENTS, -1);
@@ -117,11 +117,11 @@ _main() {
                     continue;
                 }
                 if (reqinit->role == LOG_ROLE_PUB) {
-                    ev.data.ptr = pmNewPub(&pm, peerFd, reqinit);
+                    ev.data.ptr = newPub(&pm, peerFd, reqinit);
                     epoll_ctl(epollfd, EPOLL_CTL_ADD, peerFd, &ev);
                     log1("New publisher #%d", peerFd);
                 } else if (reqinit->role == LOG_ROLE_SUB) {
-                    pmNewSub(&pm, peerFd);
+                    newSub(&pm, peerFd);
                     log1("New subscriber #%d", peerFd);
                     setsockopt(peerFd, SOL_SOCKET, SO_SNDBUF, &subscriberSendBufSize, sizeof(subscriberSendBufSize));
                 }
@@ -131,7 +131,7 @@ _main() {
             } else {
                 pubEntry *entry = events[i].data.ptr;
                 if (events[i].events & (EPOLLERR | EPOLLHUP) || !limitRead(fd, sizeof(msgLog), buf, LOGBUFLEN)) {
-                    pmFreePub(&pm, entry);
+                    freePub(&pm, entry);
                     log1("Publisher #%d leave", fd);
                 } else {
                     logFmt = log->data[log->len - 1] == '\n' ? LOG_FMT : LOG_FMT "\n";
@@ -141,11 +141,11 @@ _main() {
                                 entry->len, entry->tag,
                                 logLevel2String(log->level),
                                 log->len, log->data);
-                    pmPost(&pm, msgbuf, n);
+                    postMessage(&pm, msgbuf, n);
                 }
             }
         }
     }
-    pmFree(&pm);
+    freePeerManager(&pm);
     return 0;
 }

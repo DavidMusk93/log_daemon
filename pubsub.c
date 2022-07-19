@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/mman.h>
+#include <assert.h>
 
 #include "macro.h"
 
@@ -22,46 +24,63 @@ static int findFreePubEntry(const void *e, void *data) {
     return ((pubEntry *) e)->flags;
 }
 
-void pmInit(peerManager *o) {
-    arrayInit(&o->subStack);
+void initPeerManager(peerManager *o) {
+    arrayInit(&o->freeSubList);
+    sortArrayInit(&o->activeSubList, &compareSubEntry);
     arrayInit(&o->pubList);
-    sortArrayInit(&o->subEntries, &compareSubEntry);
-    o->ring = newRingArray(RING_BASEEXP2);
+    o->ringCache = newRingArray(RING_BASEEXP2);
+    initQueue(&o->freeMessageQueue);
+
+    size_t bufSize = o->ringCache->total * PAGE_SIZE;
+    struct message *msg;
+    void *p, *e;
+    o->messageBuffer = mmap(0, bufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+    assert(o->messageBuffer != MAP_FAILED);
+    for (p = o->messageBuffer, e = p + bufSize; p < e; p += PAGE_SIZE) {
+        msg = p;
+        pushQueue(&o->freeMessageQueue, &msg->link);
+    }
 }
 
-void pmFree(peerManager *o) {
+void freePeerManager(peerManager *o) {
     arrayIterator it;
     void *e;
-    arrayIteratorInit(&it, &o->subStack);
-    while ((e = arrayNext(&it))) free(e);
-    arrayFree(&o->subStack);
+
+    munmap(o->messageBuffer, o->ringCache->total * PAGE_SIZE);
+
+    freeRingArray(o->ringCache);
+
     arrayIteratorInit(&it, &o->pubList);
     while ((e = arrayNext(&it))) free(entryToPtr(e));
     arrayFree(&o->pubList);
-    arrayIteratorInit(&it, (array *) &o->subEntries);
+
+    arrayIteratorInit(&it, (array *) &o->activeSubList);
     while ((e = arrayNext(&it))) free(e);
-    sortArrayFree(&o->subEntries);
-    freeRingArray(o->ring);
+    sortArrayFree(&o->activeSubList);
+
+    arrayIteratorInit(&it, &o->freeSubList);
+    while ((e = arrayNext(&it))) free(e);
+    arrayFree(&o->freeSubList);
 }
 
-int pmNewSub(peerManager *o, int fd) {
-    subEntry *e = arrayPop(&o->subStack);
+int newSub(peerManager *o, int fd) {
+    subEntry *e = arrayPop(&o->freeSubList);
     if (!e) {
         e = malloc(sizeof(*e));
         if (!e) return 0;
     }
     e->fd = fd;
     e->failCount = 0;
-    return sortArrayPut(&o->subEntries, e);
+    return sortArrayPut(&o->activeSubList, e);
 }
 
-void pmFreeSub(peerManager *o, subEntry *e) {
+void freeSub(peerManager *o, subEntry *e) {
     close(e->fd);
-    arrayPush(&o->subStack, e);
-    sortArrayErase(&o->subEntries, e);
+    arrayPush(&o->freeSubList, e);
+    sortArrayErase(&o->activeSubList, e);
 }
 
-pubEntry *pmNewPub(peerManager *o, int fd, msgReqInit *req) {
+pubEntry *newPub(peerManager *o, int fd, msgReqInit *req) {
     pubEntry *e = arrayFind(&o->pubList, &findFreePubEntry, 0);
     if (!e || prefixFromEntry(e) < req->len) {
         void *t = realloc(e ? entryToPtr(e) : 0, allocPrefixLen + sizeof(*e) + req->len);
@@ -79,39 +98,44 @@ pubEntry *pmNewPub(peerManager *o, int fd, msgReqInit *req) {
     return e;
 }
 
-void pmFreePub(peerManager *o, pubEntry *e) {
+void freePub(peerManager *o, pubEntry *e) {
     close(e->fd);
     e->flags = 1; /*mark available*/
 }
 
-void pmPost(peerManager *o, const char *msg, int len) {
+void postMessage(peerManager *o, const char *msg, int len) {
     int success, fail;
     array dead;
     arrayIterator iter;
     subEntry *sub;
     struct message *p;
 
-    if (!arraySize(&o->subEntries)) {
-        log1("No subscribers, push message to ring.");
-        /* TODO: reuse memory for message */
-        p = malloc(sizeof(*p) + len);
+    if (!arraySize(&o->activeSubList)) {
+        log1("No subscribers, push message to RingCache.");
+        if (fullRingArray(o->ringCache)) {
+            p = popRingArray(o->ringCache);
+        } else {
+            queueEntry *e;
+            popQueue(&o->freeMessageQueue, e);
+            p = (struct message *) e;
+        }
         p->len = len;
         memcpy(p->data, msg, len);
-        pushRingArray(o->ring, p);
+        pushRingArray(o->ringCache, p);
         return;
     }
-    while ((p = popRingArray(o->ring))) {
-        arrayIteratorInit(&iter, (array *) &o->subEntries);
+    while ((p = popRingArray(o->ringCache))) {
+        arrayIteratorInit(&iter, (array *) &o->activeSubList);
         while ((sub = arrayNext(&iter))) {
             if (write(sub->fd, p->data, p->len) != p->len) {
                 sub->failCount++;
             }
         }
-        free(p);
+        pushQueue(&o->freeMessageQueue, &p->link);
     }
     success = fail = 0;
     arrayInit(&dead);
-    arrayIteratorInit(&iter, (array *) &o->subEntries);
+    arrayIteratorInit(&iter, (array *) &o->activeSubList);
     while ((sub = arrayNext(&iter))) {
         if (write(sub->fd, msg, len) == len) {
             success++;
@@ -125,7 +149,7 @@ void pmPost(peerManager *o, const char *msg, int len) {
     }
     arrayIteratorInit(&iter, &dead);
     while ((sub = arrayNext(&iter))) {
-        pmFreeSub(o, sub);
+        freeSub(o, sub);
     }
     arrayFree(&dead);
     log1("Post summarize: %d success, %d fail.", success, fail);

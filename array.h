@@ -37,6 +37,7 @@ ringArray *newRingArray(uint32 baseExp2);
 void freeRingArray(ringArray *ring);
 int pushRingArray(ringArray *ring, void *item);
 void *popRingArray(ringArray *ring);
+int fullRingArray(ringArray *ring);
 
 void arrayInit(array *o);
 void arrayFree(array *o);

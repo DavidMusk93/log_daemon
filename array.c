@@ -41,6 +41,10 @@ void *popRingArray(ringArray *ring) {
     return ring->data[ring->indexConsume++ & ring->mask];
 }
 
+int fullRingArray(ringArray *ring) {
+    return ring->indexConsume + ring->total == ring->indexProduce;
+}
+
 void arrayInit(array *o) {
     o->a = o->static_items;
     o->i = 0;
