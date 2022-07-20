@@ -150,6 +150,21 @@ void *sortArrayErase(sortArray *o, void *e) {
     return e;
 }
 
+int sortArrayMakeSlot(sortArray *o, void *hint, void ***linkSlot) {
+    unsigned pos;
+    if (sortArrayFind(o, hint, &pos)) {
+        *linkSlot = &o->a[pos];
+        return 0;
+    }
+    arrayPush((array *) o, 0); /* maybe realloc */
+    *linkSlot = &o->a[pos];
+    unsigned i = o->i - 1;
+    for (; i > pos; i--) {
+        o->a[i] = o->a[i - 1];
+    }
+    return 1;
+}
+
 void arrayIteratorInit(arrayIterator *o, array *a) {
     o->array = a;
     o->i = 0;

@@ -15,12 +15,17 @@ typedef struct subEntry {
     void **interests;
 } subEntry;
 
+/* a shared object */
+struct logTag {
+    int len;
+    char data[];
+};
+
 typedef struct pubEntry {
     int fd;
-    int pid;
-    int len: 31;
+    int pid: 31;
     int flags: 1;
-    char tag[];
+    struct logTag *tag;
 } pubEntry;
 
 typedef struct peerManager {

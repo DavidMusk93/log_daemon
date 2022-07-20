@@ -51,6 +51,7 @@ void sortArrayInit(sortArray *o, compare cmp);
 void sortArrayFree(sortArray *o);
 int sortArrayPut(sortArray *o, void *e);
 void *sortArrayErase(sortArray *o, void *e);
+int sortArrayMakeSlot(sortArray *o, void *hint, void ***linkSlot);
 
 void arrayIteratorInit(arrayIterator *o, array *a);
 void *arrayNext(arrayIterator *o);

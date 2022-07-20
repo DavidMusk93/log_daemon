@@ -8,6 +8,7 @@
 #include <assert.h>
 
 #include "macro.h"
+#include "object.h"
 
 #define allocPrefixLen sizeof(long)
 #define ptrToEntry(p) ((char*)(p)+allocPrefixLen)
@@ -82,6 +83,8 @@ void freeSub(peerManager *o, subEntry *e) {
 
 pubEntry *newPub(peerManager *o, int fd, msgReqInit *req) {
     pubEntry *e = arrayFind(&o->pubList, &findFreePubEntry, 0);
+    struct logTag *tag;
+
     if (!e || prefixFromEntry(e) < req->len) {
         void *t = realloc(e ? entryToPtr(e) : 0, allocPrefixLen + sizeof(*e) + req->len);
         if (!t) return 0;
@@ -92,15 +95,18 @@ pubEntry *newPub(peerManager *o, int fd, msgReqInit *req) {
     }
     e->fd = fd;
     e->pid = req->pid;
-    e->len = req->len;
     e->flags = 0; /*mark inuse*/
-    memcpy(e->tag, req->tag, e->len);
+    tag = makeObject(sizeof(*tag) + req->len, NULL, NULL);
+    e->tag = tag;
+    tag->len = req->len;
+    memcpy(tag->data, req->tag, req->len);
     return e;
 }
 
 void freePub(peerManager *o, pubEntry *e) {
     close(e->fd);
     e->flags = 1; /*mark available*/
+    unrefObject(e->tag);
 }
 
 void postMessage(peerManager *o, const char *msg, int len) {

@@ -139,7 +139,7 @@ _main() {
                     n = sprintf(messageBuffer, logFmt,
                                 log->sec, log->us,
                                 entry->pid, log->tid,
-                                entry->len, entry->tag,
+                                entry->tag->len, entry->tag->data,
                                 logLevel2String(log->level),
                                 log->len, log->data);
                     postMessage(&manager, messageBuffer, n);
