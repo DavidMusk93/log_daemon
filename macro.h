@@ -65,3 +65,26 @@ do{\
 
 #define unixDgramClient(rc, fd, path) _unixClient(rc,fd,SOCK_DGRAM,path)
 #define unixStreamClient(rc, fd, path) _unixClient(rc,fd,SOCK_STREAM,path)
+
+#define __concat(x, y) x##y
+#define _concat(x, y) __concat(x,y)
+
+#define _arg17(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16) _16
+#define argCount(...) _arg17(__VA_ARGS__,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1)
+#define _opList1(op, x)    op(x)
+#define _opList2(op, ...)  op(x) _opList1(op,__VA_ARGS__)
+#define _opList3(op, ...)  op(x) _opList2(op,__VA_ARGS__)
+#define _opList4(op, ...)  op(x) _opList3(op,__VA_ARGS__)
+#define _opList5(op, ...)  op(x) _opList4(op,__VA_ARGS__)
+#define _opList6(op, ...)  op(x) _opList5(op,__VA_ARGS__)
+#define _opList7(op, ...)  op(x) _opList6(op,__VA_ARGS__)
+#define _opList8(op, ...)  op(x) _opList7(op,__VA_ARGS__)
+#define _opList9(op, ...)  op(x) _opList8(op,__VA_ARGS__)
+#define _opList10(op, ...) op(x) _opList9(op,__VA_ARGS__)
+#define _opList11(op, ...) op(x) _opList10(op,__VA_ARGS__)
+#define _opList12(op, ...) op(x) _opList11(op,__VA_ARGS__)
+#define _opList13(op, ...) op(x) _opList12(op,__VA_ARGS__)
+#define _opList14(op, ...) op(x) _opList13(op,__VA_ARGS__)
+#define _opList15(op, ...) op(x) _opList14(op,__VA_ARGS__)
+#define _opList16(op, ...) op(x) _opList15(op,__VA_ARGS__)
+#define opList(op, ...) _concat(_opList,argCount(__VA_ARGS__))(op,__VA_ARGS__)

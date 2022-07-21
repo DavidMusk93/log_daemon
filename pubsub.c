@@ -9,6 +9,7 @@
 
 #include "macro.h"
 #include "object.h"
+#include "log.h"
 
 #define allocPrefixLen sizeof(long)
 #define ptrToEntry(p) ((char*)(p)+allocPrefixLen)
@@ -104,46 +105,81 @@ pubEntry *newPub(peerManager *o, int fd, msgReqInit *req) {
 }
 
 void freePub(peerManager *o, pubEntry *e) {
+    opList((void), o);
     close(e->fd);
     e->flags = 1; /*mark available*/
     unrefObject(e->tag);
 }
 
-void postMessage(peerManager *o, const char *msg, int len) {
+#define unrefMessage(p) \
+unrefObject(((struct message*)(p))->tag);\
+unrefObject(((struct message*)(p))->content)
+#define MSG_FMT "%u.%06u %d#%d %.*s %s %.*s"
+
+static __thread char messageBuffer[PAGE_SIZE];
+
+static const char *levelStr(int level) {
+#define __case(x) case LOG_LEVEL_##x:return #x
+    switch (level) {
+        __case(DEBUG);
+        __case(INFO);
+        __case(WARN);
+        __case(ERROR);
+        default:
+            return "UNKNOWN";
+    }
+#undef __case
+}
+
+static const char *msgFmt(struct message *msg, int *ptrLen) {
+    const char *fmt = msg->content->data[msg->content->len - 1] == '\n' ? MSG_FMT : MSG_FMT "\n";
+    *ptrLen = sprintf(messageBuffer, fmt, msg->sec, msg->us, msg->pid, msg->tid, msg->tag->len, msg->tag->data,
+                      levelStr(msg->level), msg->content->len, msg->content->data);
+    return messageBuffer;
+}
+
+void postMessage(peerManager *o, struct message *msg) {
     int success, fail;
     array dead;
-    arrayIterator iter;
+    arrayIterator it;
     subEntry *sub;
-    struct message *p;
+    void *p;
+    const char *msgStr;
+    int msgLen;
 
     if (!arraySize(&o->activeSubList)) {
         log1("No subscribers, push message to RingCache.");
         if (fullRingArray(o->ringCache)) {
             p = popRingArray(o->ringCache);
+            unrefMessage(p);
         } else {
             queueEntry *e;
             popQueue(&o->freeMessageQueue, e);
-            p = (struct message *) e;
+            p = e;
         }
-        p->len = len;
-        memcpy(p->data, msg, len);
+        *(struct message *) p = *msg;
         pushRingArray(o->ringCache, p);
         return;
     }
-    while ((p = popRingArray(o->ringCache))) {
-        arrayIteratorInit(&iter, (array *) &o->activeSubList);
-        while ((sub = arrayNext(&iter))) {
-            if (write(sub->fd, p->data, p->len) != p->len) {
+    p = msg;
+    while ((msg = popRingArray(o->ringCache))) {
+        arrayIteratorInit(&it, (array *) &o->activeSubList);
+        msgStr = msgFmt(msg, &msgLen);
+        while ((sub = arrayNext(&it))) {
+            if (write(sub->fd, msgStr, msgLen) != msgLen) {
                 sub->failCount++;
             }
         }
-        pushQueue(&o->freeMessageQueue, &p->link);
+        pushQueue(&o->freeMessageQueue, &msg->link);
+        unrefMessage(msg);
     }
+    msgStr = msgFmt(p, &msgLen);
+    unrefMessage(p);
     success = fail = 0;
     arrayInit(&dead);
-    arrayIteratorInit(&iter, (array *) &o->activeSubList);
-    while ((sub = arrayNext(&iter))) {
-        if (write(sub->fd, msg, len) == len) {
+    arrayIteratorInit(&it, (array *) &o->activeSubList);
+    while ((sub = arrayNext(&it))) {
+        if (write(sub->fd, msgStr, msgLen) == msgLen) {
             success++;
             sub->failCount = 0;
         } else {
@@ -153,8 +189,8 @@ void postMessage(peerManager *o, const char *msg, int len) {
             }
         }
     }
-    arrayIteratorInit(&iter, &dead);
-    while ((sub = arrayNext(&iter))) {
+    arrayIteratorInit(&it, &dead);
+    while ((sub = arrayNext(&it))) {
         freeSub(o, sub);
     }
     arrayFree(&dead);

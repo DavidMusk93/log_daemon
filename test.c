@@ -5,6 +5,7 @@
 
 #include "macro.h"
 #include "log.h"
+#include "misc.h"
 
 _main() {
 //    log1("%lu,%lu", sizeof(msgReqInit), sizeof(msgLog));
@@ -13,7 +14,7 @@ _main() {
     int i = 0;
     for (;;) {
         logPost(LOG_LEVEL_INFO, "posting #%d", ++i);
-        sleep(1);
+        sleepMs(1000);
     }
     return 0;
 }

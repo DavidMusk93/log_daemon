@@ -20,7 +20,7 @@ void reclaimObject(arena *arena, void *objectPointer);
  *   ref & unref
  */
 void *makeObject(size_t objectSize, disposeFn dispose, void *context);
-int refObject(void *objectPointer);
+void *refObject(void *objectPointer);
 int unrefObject(void *objectPointer);
 
 

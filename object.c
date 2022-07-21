@@ -217,9 +217,10 @@ void *makeObject(size_t objectSize, disposeFn dispose, void *context) {
     return meta + 1;
 }
 
-int refObject(void *objectPointer) {
+void *refObject(void *objectPointer) {
     struct objectMeta *meta = objectPointer - sizeof(*meta);
-    return __sync_add_and_fetch(&meta->refCount, 1);
+    __sync_add_and_fetch(&meta->refCount, 1);
+    return objectPointer;
 }
 
 int unrefObject(void *objectPointer) {

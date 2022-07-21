@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(logd)
 
-set(CMAKE_C_FLAGS "-g -fPIC -Wall")
+set(CMAKE_C_FLAGS "-g -fPIC -Wall -Werror")
 
 include_directories(.)
 add_executable(${PROJECT_NAME} daemon.c misc.c array.c pubsub.c object.c)

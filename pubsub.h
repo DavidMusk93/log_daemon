@@ -37,10 +37,20 @@ typedef struct peerManager {
     void *messageBuffer;
 } peerManager;
 
-struct message {
-    queueEntry link;
+struct logContent {
     int len;
     char data[];
+};
+
+struct message {
+    queueEntry link;
+    uint32 sec;
+    uint32 us;
+    int pid;
+    int tid: 29;
+    int level: 3;
+    struct logTag *tag;
+    struct logContent *content;
 };
 
 void initPeerManager(peerManager *o);
@@ -49,6 +59,6 @@ int newSub(peerManager *o, int fd);
 void freeSub(peerManager *o, subEntry *e);
 pubEntry *newPub(peerManager *o, int fd, msgReqInit *req);
 void freePub(peerManager *o, pubEntry *e);
-void postMessage(peerManager *o, const char *msg, int len);
+void postMessage(peerManager *o, struct message *msg);
 
 #endif //LOGD_PUBSUB_H

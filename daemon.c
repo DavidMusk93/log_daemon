@@ -16,19 +16,7 @@
 #include "log.h"
 #include "pubsub.h"
 #include "misc.h"
-
-static const char *logLevel2String(int level) {
-#define __case(x) case LOG_LEVEL_##x:return #x
-    switch (level) {
-        __case(DEBUG);
-        __case(INFO);
-        __case(WARN);
-        __case(ERROR);
-        default:
-            return "UNKNOWN";
-    }
-#undef __case
-}
+#include "object.h"
 
 int specificRead(int fd, char *buf, int len) {
     int rc, retry;
@@ -77,22 +65,20 @@ enum {
 };
 
 #define DAEMON_MAX_EVENTS 1024
-#define LOG_FMT "%u.%06u %d#%d %.*s %s %.*s"
 
 _main() {
     signal(SIGPIPE, SIG_IGN);
-    int i, n, rc = -1;
+    int i, rc = -1;
     const int subscriberSendBufSize = 16 * 1024 * 1024;
     autoFd(serverFd);
     autoFd(epollFd);
     struct epoll_event events[DAEMON_MAX_EVENTS], ev;
     peerManager manager;
     _attr(aligned(8)) char protocolBuffer[LOGBUFLEN];
-    char messageBuffer[LOGMSGLEN];
     msgReqInit *initRequest = (msgReqInit *) protocolBuffer;
     msgLog *log = (msgLog *) protocolBuffer;
     pubEntry serverEntry;
-    const char *logFmt;
+    struct message msg;
 
     unixStreamServer(rc, serverFd, LOGIPC);
     if (rc == -1) return DAEMON_ERROR_SERVER;
@@ -135,14 +121,16 @@ _main() {
                     freePub(&manager, entry);
                     log1("Publisher #%d leave", fd);
                 } else {
-                    logFmt = log->data[log->len - 1] == '\n' ? LOG_FMT : LOG_FMT "\n";
-                    n = sprintf(messageBuffer, logFmt,
-                                log->sec, log->us,
-                                entry->pid, log->tid,
-                                entry->tag->len, entry->tag->data,
-                                logLevel2String(log->level),
-                                log->len, log->data);
-                    postMessage(&manager, messageBuffer, n);
+                    msg.sec = log->sec;
+                    msg.us = log->us;
+                    msg.pid = entry->pid;
+                    msg.tid = log->tid;
+                    msg.level = log->level;
+                    msg.tag = refObject(entry->tag);
+                    msg.content = makeObject(sizeof(struct logContent) + log->len, NULL, NULL);
+                    msg.content->len = log->len;
+                    memcpy(msg.content->data, log->data, log->len);
+                    postMessage(&manager, &msg);
                 }
             }
         }
