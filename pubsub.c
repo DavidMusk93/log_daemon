@@ -11,12 +11,6 @@
 #include "object.h"
 #include "log.h"
 
-#define allocPrefixLen sizeof(long)
-#define ptrToEntry(p) ((char*)(p)+allocPrefixLen)
-#define entryToPtr(e) ((char*)(e)-allocPrefixLen)
-#define prefixFromPtr(p) ((long*)(p))[0]
-#define prefixFromEntry(e) ((long*)(e))[-1]
-
 static int compareSubEntry(const void *l, const void *r) {
     return *(int *) l - *(int *) r;
 }
@@ -53,7 +47,7 @@ void freePeerManager(peerManager *o) {
     freeRingArray(o->ringCache);
 
     arrayIteratorInit(&it, &o->pubList);
-    while ((e = arrayNext(&it))) free(entryToPtr(e));
+    while ((e = arrayNext(&it))) free(e);
     arrayFree(&o->pubList);
 
     arrayIteratorInit(&it, (array *) &o->activeSubList);
@@ -86,13 +80,9 @@ pubEntry *newPub(peerManager *o, int fd, msgReqInit *req) {
     pubEntry *e = arrayFind(&o->pubList, &findFreePubEntry, 0);
     struct logTag *tag;
 
-    if (!e || prefixFromEntry(e) < req->len) {
-        void *t = realloc(e ? entryToPtr(e) : 0, allocPrefixLen + sizeof(*e) + req->len);
-        if (!t) return 0;
-        prefixFromPtr(t) = req->len;
-        t = ptrToEntry(t);
-        if (!e) arrayPush(&o->pubList, t);
-        e = t;
+    if (!e) {
+        e = malloc(sizeof(*e));
+        arrayPush(&o->pubList, e);
     }
     e->fd = fd;
     e->pid = req->pid;
