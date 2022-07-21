@@ -111,8 +111,9 @@ static void *claimSlot(struct arena *arena, struct arenaMeta *hint) {
         /*alloc slot*/
         r = arena->slotBuffer;
         arena->slotBuffer += sizeof(*r);
-        assert(arena->slotBuffer <= arena->slotBufferEnd);
+        assert(arena->slotBuffer < arena->slotBufferEnd);
         *slotPointer = r;
+        r->meta = *hint;
         initQueue(&r->head);
     } else {
         r = *slotPointer;

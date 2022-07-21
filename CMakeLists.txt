@@ -2,11 +2,22 @@ cmake_minimum_required(VERSION 3.10)
 
 project(logd)
 
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif ()
+
 set(CMAKE_C_FLAGS "-g -fPIC -Wall -Werror")
+set(EXTERN_LIBS "")
+
+string(TOUPPER "${CMAKE_BUILD_TYPE}" uppercase_CMAKE_BUILD_TYPE)
+if (uppercase_CMAKE_BUILD_TYPE MATCHES "DEBUG")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fsanitize=leak")
+    set(EXTERN_LIBS "asan")
+endif ()
 
 include_directories(.)
 add_executable(${PROJECT_NAME} daemon.c misc.c array.c pubsub.c object.c)
-target_link_libraries(${PROJECT_NAME} pthread)
+target_link_libraries(${PROJECT_NAME} pthread ${EXTERN_LIBS})
 
 add_executable(logcat cat.c misc.c)
 target_link_libraries(logcat)
