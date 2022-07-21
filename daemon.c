@@ -4,13 +4,15 @@
 #include <poll.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
-#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <sys/un.h>
+
+#include <signal.h>
+#include <sys/signalfd.h>
 
 #include "macro.h"
 #include "log.h"
@@ -61,6 +63,7 @@ enum {
     DAEMON_OK,
     DAEMON_ERROR_SERVER,
     DAEMON_ERROR_ACCEPT,
+    DAEMON_ERROR_SIGNALFD,
     DAEMON_ERROR_INIT,
 };
 
@@ -80,11 +83,30 @@ _main() {
     pubEntry serverEntry;
     struct message msg;
 
+    pubEntry signalEntry;
+    sigset_t signalMask;
+    int signalFd;
+    struct signalfd_siginfo signalInfo;
+
+    epollFd = epoll_create1(0);
+    memset(&ev, 0, sizeof(ev));
+
+    sigemptyset(&signalMask);
+    sigaddset(&signalMask, SIGINT);
+    sigaddset(&signalMask, SIGQUIT);
+    sigprocmask(SIG_BLOCK, &signalMask, NULL);
+    signalFd = signalfd(-1, &signalMask, SFD_NONBLOCK | SFD_CLOEXEC);
+    if (signalFd == -1) {
+        return DAEMON_ERROR_SIGNALFD;
+    }
+    signalEntry.fd = signalFd;
+    ev.data.ptr = &signalEntry;
+    ev.events = EPOLLIN;
+    epoll_ctl(epollFd, EPOLL_CTL_ADD, signalFd, &ev);
+
     unixStreamServer(rc, serverFd, LOGIPC);
     if (rc == -1) return DAEMON_ERROR_SERVER;
     serverEntry.fd = serverFd;
-    epollFd = epoll_create1(0);
-    memset(&ev, 0, sizeof(ev));
     ev.data.ptr = &serverEntry;
     ev.events = EPOLLIN;
     epoll_ctl(epollFd, EPOLL_CTL_ADD, serverFd, &ev);
@@ -114,6 +136,10 @@ _main() {
                 msgResInit initResponse = {0};
                 write(peerFd, &initResponse, sizeof initResponse);
                 peerFd = -1;
+            } else if (__builtin_expect(fd == signalFd, 0)) {
+                (void) read(signalFd, &signalInfo, sizeof(signalInfo));
+                log2("recv signal:%d, quit.", signalInfo.ssi_signo);
+                goto quit;
             } else {
                 pubEntry *entry = events[i].data.ptr;
                 if (events[i].events & (EPOLLERR | EPOLLHUP) ||
@@ -135,6 +161,7 @@ _main() {
             }
         }
     }
+    quit:
     freePeerManager(&manager);
-    return 0;
+    return DAEMON_OK;
 }

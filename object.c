@@ -100,6 +100,8 @@ void freeArena(void *arena) {
 
     arrayFree(&o->listAllocPoint);
     sortArrayFree(&o->listSlot);
+
+    free(arena);
 }
 
 static void *claimSlot(struct arena *arena, struct arenaMeta *hint) {
