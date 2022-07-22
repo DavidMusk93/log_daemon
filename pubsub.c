@@ -27,12 +27,13 @@ void initPeerManager(peerManager *o) {
     o->ringCache = newRingArray(RING_BASEEXP2);
     initQueue(&o->freeMessageQueue);
 
-    size_t bufSize = o->ringCache->total * PAGE_SIZE;
+    size_t bufSize = o->ringCache->total * sizeof(struct message);
+    bufSize = pageSizeAlign(bufSize);
     struct message *msg;
     void *p, *e;
     o->messageBuffer = mmap(0, bufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
     assert(o->messageBuffer != MAP_FAILED);
-    for (p = o->messageBuffer, e = p + bufSize; p < e; p += PAGE_SIZE) {
+    for (p = o->messageBuffer, e = p + bufSize; p < e; p += sizeof(*msg)) {
         msg = p;
         pushQueue(&o->freeMessageQueue, &msg->link);
     }

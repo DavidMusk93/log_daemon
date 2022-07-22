@@ -5,9 +5,25 @@
 #include "array.h"
 #include "queue.h"
 
+#define RING_BASEEXP2_THRESHOLD_LOW  4
+#define RING_BASEEXP2_THRESHOLD_HIGH 16
 #define MAX_FAIL_COUNT 3
-#define RING_BASEEXP2  4
-#define PAGE_SIZE      4096
+#ifndef RING_BASEEXP2
+# define RING_BASEEXP2  8
+#endif
+
+#if RING_BASEEXP2 > RING_BASEEXP2_THRESHOLD_HIGH
+# undef RING_BASEEXP2
+# define RING_BASEEXP2 RING_BASEEXP2_THRESHOLD_HIGH
+#endif
+
+#if RING_BASEEXP2 < RING_BASEEXP2_THRESHOLD_LOW
+# undef RING_BASEEXP2
+# define RING_BASEEXP2 RING_BASEEXP2_THRESHOLD_LOW
+#endif
+
+#define PAGE_SIZE        4096
+#define pageSizeAlign(x) ((x+PAGE_SIZE-1)&-PAGE_SIZE)
 
 typedef struct subEntry {
     int fd;
