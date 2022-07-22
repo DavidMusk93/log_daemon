@@ -43,7 +43,8 @@ void freePeerManager(peerManager *o) {
     arrayIterator it;
     void *e;
 
-    munmap(o->messageBuffer, o->ringCache->total * PAGE_SIZE);
+    /* TODO: trace memory map & unmap */
+    munmap(o->messageBuffer, pageSizeAlign(o->ringCache->total * sizeof(struct message)));
 
     freeRingArray(o->ringCache);
 
