@@ -16,7 +16,7 @@ if (uppercase_CMAKE_BUILD_TYPE MATCHES "DEBUG")
 endif ()
 
 include_directories(.)
-add_executable(${PROJECT_NAME} daemon.c misc.c array.c pubsub.c object.c)
+add_executable(${PROJECT_NAME} daemon.c misc.c array.c pubsub.c object.c filter.c)
 target_link_libraries(${PROJECT_NAME} pthread ${EXTERN_LIBS})
 
 add_executable(logcat cat.c misc.c)
@@ -35,3 +35,7 @@ add_test(NAME queue_test COMMAND queue_test)
 
 add_executable(ring_test ring_test.c array.c)
 add_test(NAME ring_test COMMAND ring_test)
+
+add_executable(filter_test filter.c array.c object.c)
+target_compile_definitions(filter_test PRIVATE TEST_FILTER=1)
+add_test(NAME filter_test COMMAND filter_test)

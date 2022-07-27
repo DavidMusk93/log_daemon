@@ -19,6 +19,7 @@ _main() {
             return 1;
         }
     }
-    /* TODO: free ringArray* */
+
+    freeRingArray(ring);
     return 0;
 }

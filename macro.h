@@ -16,6 +16,11 @@ setbuf(stderr,0)
 #define attrCtor _attr(constructor)
 #define attrDtor _attr(destructor)
 
+#define __ctor() \
+static attrCtor void initGlobalVariables()
+#define __dtor() \
+static attrDtor void freeGlobalVariables()
+
 #define autoFd(name) int name attrScopeGuard(closeFd)=-1
 
 #define _poll(rc, fn, ...) \
