@@ -14,6 +14,12 @@
 static __thread char sendBuf[LOGMSGLEN];
 static __thread int clientFd = STDOUT_FILENO;
 
+__dtor() {
+    if (clientFd != STDOUT_FILENO) {
+        closeFd(&clientFd);
+    }
+}
+
 int logInit(const char *tag) {
     int rc = -1;
     autoFd(fd);
@@ -21,13 +27,13 @@ int logInit(const char *tag) {
     if (rc == -1) return 0;
 
     int len = (int) strlen(tag);
-    msgReqInit *reqptr = (msgReqInit *) sendBuf;
-    msgResInit res = {-1};
-    reqptr->pid = myPid();
-    reqptr->role = LOG_ROLE_PUB;
-    reqptr->len = len;
-    memcpy(reqptr->tag, tag, len);
-    write(fd, sendBuf, sizeof(*reqptr) + len);
+    initLogRequest *ptrReq = (initLogRequest *) sendBuf;
+    initLogResponse res = {-1};
+    ptrReq->pid = myPid();
+    ptrReq->role = LOG_ROLE_PUB;
+    ptrReq->len = len;
+    memcpy(ptrReq->tag, tag, len);
+    write(fd, sendBuf, sizeof(*ptrReq) + len);
     read(fd, &res, sizeof(res));
     if (res.status != 0) return 0;
     clientFd = fd;

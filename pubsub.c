@@ -6,10 +6,12 @@
 #include <stdio.h>
 #include <sys/mman.h>
 #include <assert.h>
+#include <sys/socket.h>
 
 #include "macro.h"
 #include "object.h"
 #include "log.h"
+#include "filter.h"
 
 static int compareSubEntry(const void *l, const void *r) {
     return *(int *) l - *(int *) r;
@@ -24,7 +26,7 @@ void initPeerManager(peerManager *o) {
     arrayInit(&o->freeSubList);
     sortArrayInit(&o->activeSubList, &compareSubEntry);
     arrayInit(&o->pubList);
-    o->ringCache = newRingArray(RING_BASEEXP2);
+    o->ringCache = newRing(RING_BASEEXP2);
     initQueue(&o->freeMessageQueue);
 
     size_t bufSize = o->ringCache->total * sizeof(struct message);
@@ -40,28 +42,28 @@ void initPeerManager(peerManager *o) {
 }
 
 void freePeerManager(peerManager *o) {
-    arrayIterator it;
+    iteratorArray it;
     void *e;
 
     /* TODO: trace memory map & unmap */
     munmap(o->messageBuffer, pageSizeAlign(o->ringCache->total * sizeof(struct message)));
 
-    freeRingArray(o->ringCache);
+    freeRing(o->ringCache);
 
-    arrayIteratorInit(&it, &o->pubList);
-    while ((e = arrayNext(&it))) free(e);
+    initIteratorArray(&it, &o->pubList);
+    while ((e = nextElementArray(&it))) free(e);
     arrayFree(&o->pubList);
 
-    arrayIteratorInit(&it, (array *) &o->activeSubList);
-    while ((e = arrayNext(&it))) free(e);
+    initIteratorArray(&it, (array *) &o->activeSubList);
+    while ((e = nextElementArray(&it))) free(e);
     sortArrayFree(&o->activeSubList);
 
-    arrayIteratorInit(&it, &o->freeSubList);
-    while ((e = arrayNext(&it))) free(e);
+    initIteratorArray(&it, &o->freeSubList);
+    while ((e = nextElementArray(&it))) free(e);
     arrayFree(&o->freeSubList);
 }
 
-int newSub(peerManager *o, int fd) {
+int newSub(peerManager *o, int fd, initLogRequest *req) {
     subEntry *e = arrayPop(&o->freeSubList);
     if (!e) {
         e = malloc(sizeof(*e));
@@ -69,16 +71,24 @@ int newSub(peerManager *o, int fd) {
     }
     e->fd = fd;
     e->failCount = 0;
+
+    byteReader r = {req->tag, req->tag + req->len};
+    unpackFilter(&r, &e->f);
+
     return sortArrayPut(&o->activeSubList, e);
 }
 
 void freeSub(peerManager *o, subEntry *e) {
     close(e->fd);
+    if (e->f) {
+        freeFilter(e->f);
+    }
+
     arrayPush(&o->freeSubList, e);
     sortArrayErase(&o->activeSubList, e);
 }
 
-pubEntry *newPub(peerManager *o, int fd, msgReqInit *req) {
+pubEntry *newPub(peerManager *o, int fd, initLogRequest *req) {
     pubEntry *e = arrayFind(&o->pubList, &findFreePubEntry, 0);
     struct logTag *tag;
 
@@ -133,32 +143,36 @@ static const char *msgFmt(struct message *msg, int *ptrLen) {
 void postMessage(peerManager *o, struct message *msg) {
     int success, fail;
     array dead;
-    arrayIterator it;
+    iteratorArray it;
     subEntry *sub;
     void *p;
     const char *msgStr;
     int msgLen;
+    int state;
+    socklen_t stateLen = sizeof(state);
+    queueEntry *e;
 
     if (!arraySize(&o->activeSubList)) {
+        cache:
         log1("No subscribers, push message to RingCache.");
-        if (fullRingArray(o->ringCache)) {
-            p = popRingArray(o->ringCache);
+        if (isFullRing(o->ringCache)) {
+            p = popRing(o->ringCache);
             unrefMessage(p);
         } else {
-            queueEntry *e;
             popQueue(&o->freeMessageQueue, e);
             p = e;
         }
         *(struct message *) p = *msg;
-        pushRingArray(o->ringCache, p);
+        pushRing(o->ringCache, p);
         return;
     }
     p = msg;
-    while ((msg = popRingArray(o->ringCache))) {
-        arrayIteratorInit(&it, (array *) &o->activeSubList);
+    while ((msg = popRing(o->ringCache))) {
+        initIteratorArray(&it, (array *) &o->activeSubList);
         msgStr = msgFmt(msg, &msgLen);
-        while ((sub = arrayNext(&it))) {
-            if (write(sub->fd, msgStr, msgLen) != msgLen) {
+        while ((sub = nextElementArray(&it))) {
+            if ((!sub->f/*all interest*/ || evalFilter(sub->f, msg)/*hit*/) &&
+                write(sub->fd, msgStr, msgLen) != msgLen) {
                 sub->failCount++;
             }
         }
@@ -166,11 +180,17 @@ void postMessage(peerManager *o, struct message *msg) {
         unrefMessage(msg);
     }
     msgStr = msgFmt(p, &msgLen);
-    unrefMessage(p);
     success = fail = 0;
     arrayInit(&dead);
-    arrayIteratorInit(&it, (array *) &o->activeSubList);
-    while ((sub = arrayNext(&it))) {
+    initIteratorArray(&it, (array *) &o->activeSubList);
+    while ((sub = nextElementArray(&it))) {
+        if (sub->f && !evalFilter(sub->f, p)) { /*not interest*/
+            getsockopt(sub->fd, SOL_SOCKET, SO_ERROR, &state, &stateLen);
+            if (state) { /*sock inactive*/
+                arrayPush(&dead, sub);
+            }
+            continue;
+        }
         if (write(sub->fd, msgStr, msgLen) == msgLen) {
             success++;
             sub->failCount = 0;
@@ -181,8 +201,15 @@ void postMessage(peerManager *o, struct message *msg) {
             }
         }
     }
-    arrayIteratorInit(&it, &dead);
-    while ((sub = arrayNext(&it))) {
+
+    if (success == 0 && fail == 0) {
+        msg = p;
+        goto cache;
+    }
+
+    unrefMessage(p);
+    initIteratorArray(&it, &dead);
+    while ((sub = nextElementArray(&it))) {
         freeSub(o, sub);
     }
     arrayFree(&dead);

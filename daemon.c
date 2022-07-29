@@ -16,11 +16,12 @@
 
 #include "macro.h"
 #include "log.h"
+
 #include "pubsub.h"
 #include "misc.h"
 #include "object.h"
 
-int specificRead(int fd, char *buf, int len) {
+int readSpecific(int fd, char *buf, int len) {
     int rc, retry;
     struct pollfd pfd = {.fd=fd, .events=POLLIN};
     for (retry = 0; len > 0 && retry < LOGRECVMAXRETRY; ++retry) {
@@ -35,23 +36,23 @@ int specificRead(int fd, char *buf, int len) {
     return len == 0;
 }
 
-int limitRead(int fd, int hdrlen, char *buf, int buflen) {
-    int left = 0, datalen;
-    int *lenlink;
-    if (!specificRead(fd, buf, hdrlen)) return 0;
-    datalen = *(int *) buf;
-    lenlink = (int *) buf;
-    if (datalen == 0) return 1;
-    buf += hdrlen;
-    buflen -= hdrlen;
-    if (!specificRead(fd, buf, datalen < buflen ? datalen : buflen)) return 0;
-    /* Truncate message if 'datalen' greater than 'buflen'-'hdrlen'. */
-    if (datalen > buflen) {
-        *lenlink = buflen;
-        left = datalen - buflen;
+int readRestrict(int fd, int hdrLen, char *buf, int bufLen) {
+    int left = 0, dataLen;
+    int *linkLen;
+    if (!readSpecific(fd, buf, hdrLen)) return 0;
+    dataLen = *(int *) buf;
+    linkLen = (int *) buf;
+    if (dataLen == 0) return 1;
+    buf += hdrLen;
+    bufLen -= hdrLen;
+    if (!readSpecific(fd, buf, dataLen < bufLen ? dataLen : bufLen)) return 0;
+    /* Truncate message if 'dataLen' greater than 'bufLen'-'hdrLen'. */
+    if (dataLen > bufLen) {
+        *linkLen = bufLen;
+        left = dataLen - bufLen;
         char a[512];
         do {
-            if (!specificRead(fd, a, left < sizeof(a) ? left : (int) sizeof(a))) break;
+            if (!readSpecific(fd, a, left < sizeof(a) ? left : (int) sizeof(a))) break;
             if (left <= sizeof(a)) left = 0;
             else left -= sizeof(a);
         } while (left);
@@ -78,7 +79,7 @@ _main() {
     struct epoll_event events[DAEMON_MAX_EVENTS], ev;
     peerManager manager;
     _attr(aligned(8)) char protocolBuffer[LOGBUFLEN];
-    msgReqInit *initRequest = (msgReqInit *) protocolBuffer;
+    initLogRequest *initRequest = (initLogRequest *) protocolBuffer;
     msgLog *log = (msgLog *) protocolBuffer;
     pubEntry serverEntry;
     struct message msg;
@@ -120,7 +121,7 @@ _main() {
                 autoFd(peerFd);
                 peerFd = accept4(fd, 0, 0, O_NONBLOCK);
                 if (peerFd == -1) return DAEMON_ERROR_ACCEPT;
-                if (!limitRead(peerFd, sizeof(msgReqInit), protocolBuffer, LOGBUFLEN)) {
+                if (!readRestrict(peerFd, sizeof(initLogRequest), protocolBuffer, LOGBUFLEN)) {
                     log2("Error occurs on peer init");
                     continue;
                 }
@@ -129,11 +130,11 @@ _main() {
                     epoll_ctl(epollFd, EPOLL_CTL_ADD, peerFd, &ev);
                     log1("New publisher #%d", peerFd);
                 } else if (initRequest->role == LOG_ROLE_SUB) {
-                    newSub(&manager, peerFd);
+                    newSub(&manager, peerFd, initRequest);
                     log1("New subscriber #%d", peerFd);
                     setsockopt(peerFd, SOL_SOCKET, SO_SNDBUF, &subscriberSendBufSize, sizeof(subscriberSendBufSize));
                 }
-                msgResInit initResponse = {0};
+                initLogResponse initResponse = {0};
                 write(peerFd, &initResponse, sizeof initResponse);
                 peerFd = -1;
             } else if (__builtin_expect(fd == signalFd, 0)) {
@@ -143,7 +144,7 @@ _main() {
             } else {
                 pubEntry *entry = events[i].data.ptr;
                 if (events[i].events & (EPOLLERR | EPOLLHUP) ||
-                    !limitRead(fd, sizeof(msgLog), protocolBuffer, LOGBUFLEN)) {
+                    !readRestrict(fd, sizeof(msgLog), protocolBuffer, LOGBUFLEN)) {
                     freePub(&manager, entry);
                     log1("Publisher #%d leave", fd);
                 } else {

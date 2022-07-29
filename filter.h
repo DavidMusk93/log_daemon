@@ -23,8 +23,8 @@ enum filterOpType {
 };
 
 typedef enum filterResult {
-    FILTER_RESULT_FALSE,
-    FILTER_RESULT_TRUE,
+    FILTER_RESULT_FALSE = 0,
+    FILTER_RESULT_TRUE = 1,
 } filterResult;
 
 typedef struct filter {

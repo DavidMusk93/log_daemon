@@ -6,14 +6,14 @@
 #define MIN_BASEEXP2 3
 #define MAX_BASEEXP2 15
 
-ringArray *newRingArray(uint32 baseExp2) {
+ring *newRing(uint32 baseExp2) {
     uint32 itemCount;
     if (baseExp2 < MIN_BASEEXP2)
         baseExp2 = MIN_BASEEXP2;
     if (baseExp2 > MAX_BASEEXP2)
         baseExp2 = MAX_BASEEXP2;
     itemCount = 1 << baseExp2;
-    ringArray *r = malloc(sizeof(*r) + sizeof(void *) * itemCount);
+    ring *r = malloc(sizeof(*r) + sizeof(void *) * itemCount);
     r->total = itemCount;
     r->mask = itemCount - 1;
     r->indexProduce = 0;
@@ -21,16 +21,16 @@ ringArray *newRingArray(uint32 baseExp2) {
     return r;
 }
 
-void freeRingArray(ringArray *ring) {
+void freeRing(ring *ring) {
     free(ring);
 }
 
-int pushRingArray(ringArray *ring, void *item) {
+int pushRing(ring *ring, void *item) {
     ring->data[ring->indexProduce++ & ring->mask] = item;
     return 0;
 }
 
-void *popRingArray(ringArray *ring) {
+void *popRing(ring *ring) {
     if (ring->indexConsume == ring->indexProduce) {
         return NULL;
     }
@@ -41,7 +41,7 @@ void *popRingArray(ringArray *ring) {
     return ring->data[ring->indexConsume++ & ring->mask];
 }
 
-int fullRingArray(ringArray *ring) {
+int isFullRing(ring *ring) {
     return ring->indexConsume + ring->total == ring->indexProduce;
 }
 
@@ -165,12 +165,12 @@ int sortArrayMakeSlot(sortArray *o, void *hint, void ***linkSlot) {
     return 1;
 }
 
-void arrayIteratorInit(arrayIterator *o, array *a) {
+void initIteratorArray(iteratorArray *o, array *a) {
     o->array = a;
     o->i = 0;
 }
 
-void *arrayNext(arrayIterator *o) {
+void *nextElementArray(iteratorArray *o) {
     if (o->i < o->array->i) {
         return o->array->a[o->i++];
     }
@@ -198,7 +198,7 @@ _main() {
     for (i = 0; i < ARRAYLEN; i++) {
         sortArrayPut(&sa, (void *) (long) rand());
     }
-    arrayIterator it;
+    iteratorArray it;
     arrayIteratorInit(&it, (array *) &sa);
     void *e;
     i = 0;

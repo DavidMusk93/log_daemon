@@ -20,24 +20,24 @@ typedef struct sortArray {
     compare cmp;
 } sortArray;
 
-typedef struct arrayIterator {
+typedef struct iteratorArray {
     array *array;
     unsigned i;
-} arrayIterator;
+} iteratorArray;
 
-typedef struct ringArray {
+typedef struct ring {
     uint32 total;
     uint32 mask;
     uint32 indexProduce;
     uint32 indexConsume;
     void *data[];
-} ringArray;
+} ring;
 
-ringArray *newRingArray(uint32 baseExp2);
-void freeRingArray(ringArray *ring);
-int pushRingArray(ringArray *ring, void *item);
-void *popRingArray(ringArray *ring);
-int fullRingArray(ringArray *ring);
+ring *newRing(uint32 baseExp2);
+void freeRing(ring *ring);
+int pushRing(ring *ring, void *item);
+void *popRing(ring *ring);
+int isFullRing(ring *ring);
 
 void arrayInit(array *o);
 void arrayFree(array *o);
@@ -53,7 +53,7 @@ int sortArrayPut(sortArray *o, void *e);
 void *sortArrayErase(sortArray *o, void *e);
 int sortArrayMakeSlot(sortArray *o, void *hint, void ***linkSlot);
 
-void arrayIteratorInit(arrayIterator *o, array *a);
-void *arrayNext(arrayIterator *o);
+void initIteratorArray(iteratorArray *o, array *a);
+void *nextElementArray(iteratorArray *o);
 
 #endif //LOGDAEMON_ARRAY_H

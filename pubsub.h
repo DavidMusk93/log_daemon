@@ -4,6 +4,7 @@
 #include "msg.h"
 #include "array.h"
 #include "queue.h"
+#include "packer.h"
 
 #define RING_BASEEXP2_THRESHOLD_LOW  4
 #define RING_BASEEXP2_THRESHOLD_HIGH 16
@@ -28,7 +29,7 @@
 typedef struct subEntry {
     int fd;
     int failCount;
-    void **interests;
+    struct filter *f;
 } subEntry;
 
 /* a shared object */
@@ -48,7 +49,7 @@ typedef struct peerManager {
     array freeSubList;
     sortArray activeSubList;
     array pubList;
-    ringArray *ringCache;
+    ring *ringCache;
     queueEntry freeMessageQueue;
     void *messageBuffer;
 } peerManager;
@@ -71,9 +72,9 @@ struct message {
 
 void initPeerManager(peerManager *o);
 void freePeerManager(peerManager *o);
-int newSub(peerManager *o, int fd);
+int newSub(peerManager *o, int fd, initLogRequest *req);
 void freeSub(peerManager *o, subEntry *e);
-pubEntry *newPub(peerManager *o, int fd, msgReqInit *req);
+pubEntry *newPub(peerManager *o, int fd, initLogRequest *req);
 void freePub(peerManager *o, pubEntry *e);
 void postMessage(peerManager *o, struct message *msg);
 

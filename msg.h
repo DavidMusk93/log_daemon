@@ -10,11 +10,11 @@ typedef struct initLogRequest {
     int pid: 28;
     int role: 4;
     char tag[];
-} msgReqInit;
+} initLogRequest;
 
 typedef struct initLogResponse {
     int status;
-} msgResInit;
+} initLogResponse;
 
 typedef struct logMessage {
     int len;

@@ -15,7 +15,7 @@ static filterResult matchPid(filter *f, struct message *msg) {
 }
 
 static filterResult matchLevel(filter *f, struct message *msg) {
-    return f->level == msg->level ? FILTER_RESULT_TRUE : FILTER_RESULT_FALSE;
+    return f->level <= msg->level ? FILTER_RESULT_TRUE : FILTER_RESULT_FALSE;
 }
 
 static filterResult matchTag(filter *f, struct message *msg) {
@@ -87,7 +87,7 @@ filterResult evalFilter(filter *f, struct message *msg) {
         return r && evalFilter(f->f2, msg);
     }
     if (f->opType == FILTER_OP_OR) {
-        return r /*lazy or eager?*/|| evalFilter(f->f2, msg);
+        return r /*lazy*/|| evalFilter(f->f2, msg);
     }
     return r;
 }
@@ -113,6 +113,7 @@ filter *filterOr(filter *f, filter *f2) {
 
 #include "log.h"
 #include <stdio.h>
+#include <assert.h>
 
 _main() {
     struct message msg = {
@@ -121,9 +122,16 @@ _main() {
     };
     char tag[] = "filter_test";
     msg.tag = makeObject(sizeof(*msg.tag) + sizeof(tag) - 1, NULL, NULL);
+
     filter *f = newPidFilter(1324);
     filterOr(f, newTagFilter(tag, sizeof(tag) - 1));
+
     filterResult r = evalFilter(f, &msg);
+
+    int printCount = 0;
+    int x = 1 || (printCount = log1("eager"), 2);
+    assert(x && printCount == 0);
+
     unrefObject(msg.tag);
     freeFilter(f);
     return r == FILTER_RESULT_TRUE ? 0 : 1;
