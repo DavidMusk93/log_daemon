@@ -88,13 +88,13 @@ arena *newArena() {
 
 void freeArena(void *arena) {
     struct arena *o = arena;
-    struct arrayIterator it;
+    struct iteratorArray it;
     void *p;
 
     munmap(o->slotBufferEnd - ARENA_SLOT_BUFFER_SIZE, ARENA_SLOT_BUFFER_SIZE);
 
-    arrayIteratorInit(&it, &o->listAllocPoint);
-    while ((p = arrayNext(&it))) {
+    initIteratorArray(&it, &o->listAllocPoint);
+    while ((p = nextElementArray(&it))) {
         munmap(p, ARENA_ALLOC_BLOCK_SIZE);
     }
 
@@ -180,7 +180,7 @@ void *claimObject(arena *arena, size_t objectSize) {
     }
     entry = nextQueueEntry(&slot->head);
     removeQueueEntry(entry);
-    meta = (void *) entry - sizeof(*slot);
+    meta = (void *) entry - sizeof(*meta);
     meta->selfFlag |= ARENA_OBJECT_INUSE;
     return entry;
 }
@@ -203,11 +203,11 @@ void reclaimObject(arena *arena, void *objectPointer) {
 
 static arena *objectArena;
 
-static attrCtor void initGlobalVariables() {
+__ctor() {
     objectArena = newArena();
 }
 
-static attrDtor void freeGlobalVariables() {
+__dtor() {
     freeArena(objectArena);
 }
 
