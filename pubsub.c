@@ -90,19 +90,16 @@ void freeSub(peerManager *o, subEntry *e) {
 
 pubEntry *newPub(peerManager *o, int fd, initLogRequest *req) {
     pubEntry *e = arrayFind(&o->pubList, &findFreePubEntry, 0);
-    struct logTag *tag;
-
     if (!e) {
         e = malloc(sizeof(*e));
         arrayPush(&o->pubList, e);
     }
+
     e->fd = fd;
     e->pid = req->pid;
     e->flags = 0; /*mark inuse*/
-    tag = makeObject(sizeof(*tag) + req->len, NULL, NULL);
-    e->tag = tag;
-    tag->len = req->len;
-    memcpy(tag->data, req->tag, req->len);
+
+    refVarchar(e->tag, req->tag, req->len);
     return e;
 }
 
@@ -184,11 +181,12 @@ void postMessage(peerManager *o, struct message *msg) {
     arrayInit(&dead);
     initIteratorArray(&it, (array *) &o->activeSubList);
     while ((sub = nextElementArray(&it))) {
+        getsockopt(sub->fd, SOL_SOCKET, SO_ERROR, &state, &stateLen);
+        if (state) { /*sock inactive*/
+            arrayPush(&dead, sub);
+            continue;
+        }
         if (sub->f && !evalFilter(sub->f, p)) { /*not interest*/
-            getsockopt(sub->fd, SOL_SOCKET, SO_ERROR, &state, &stateLen);
-            if (state) { /*sock inactive*/
-                arrayPush(&dead, sub);
-            }
             continue;
         }
         if (write(sub->fd, msgStr, msgLen) == msgLen) {

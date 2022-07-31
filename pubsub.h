@@ -33,16 +33,20 @@ typedef struct subEntry {
 } subEntry;
 
 /* a shared object */
-struct logTag {
+typedef struct varchar {
     int len;
     char data[];
-};
+} varchar;
+#define refVarchar(_ptr, _data, _datelen) \
+(_ptr)=makeObject(sizeof(*(_ptr))+(_datelen),NULL,NULL);\
+(_ptr)->len=_datelen;\
+memcpy((_ptr)->data,_data,_datelen)
 
 typedef struct pubEntry {
     int fd;
     int pid: 31;
     int flags: 1;
-    struct logTag *tag;
+    varchar *tag;
 } pubEntry;
 
 typedef struct peerManager {
@@ -54,11 +58,6 @@ typedef struct peerManager {
     void *messageBuffer;
 } peerManager;
 
-struct logContent {
-    int len;
-    char data[];
-};
-
 struct message {
     queueEntry link;
     uint32 sec;
@@ -66,8 +65,8 @@ struct message {
     int pid;
     int tid: 29;
     int level: 3;
-    struct logTag *tag;
-    struct logContent *content;
+    varchar *tag;
+    varchar *content;
 };
 
 void initPeerManager(peerManager *o);

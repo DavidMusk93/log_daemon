@@ -154,9 +154,8 @@ _main() {
                     msg.tid = log->tid;
                     msg.level = log->level;
                     msg.tag = refObject(entry->tag);
-                    msg.content = makeObject(sizeof(struct logContent) + log->len, NULL, NULL);
-                    msg.content->len = log->len;
-                    memcpy(msg.content->data, log->data, log->len);
+                    refVarchar(msg.content, log->data, log->len);
+
                     postMessage(&manager, &msg);
                 }
             }

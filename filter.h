@@ -6,20 +6,20 @@
 #define LOGD_FILTER_H
 
 struct message;
-struct logTag;
+struct varchar;
 
 enum filterType {
-    FILTER_NONE,
-    FILTER_PID,
-    FILTER_LEVEL,
-    FILTER_TAG,
+    FILTER_NONE = 0,
+    FILTER_PID = 1,
+    FILTER_LEVEL = 2,
+    FILTER_TAG = 3,
 };
 
 enum filterOpType {
-    FILTER_OP_NONE,
-    FILTER_OP_NOT,
-    FILTER_OP_AND,
-    FILTER_OP_OR,
+    FILTER_OP_NONE = 0,
+    FILTER_OP_NOT = 1,
+    FILTER_OP_AND = 2,
+    FILTER_OP_OR = 3,
 };
 
 typedef enum filterResult {
@@ -33,7 +33,7 @@ typedef struct filter {
     union {
         int pid;
         int level;
-        struct logTag *tag;
+        struct varchar *tag;
     };
     enum filterResult (*fn)(struct filter *f, struct message *msg);
     struct filter *f2;

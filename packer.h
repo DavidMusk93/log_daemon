@@ -10,7 +10,7 @@
 typedef struct byteWriter byteWriter;
 typedef struct byteReader byteReader;
 
-struct logTag;
+struct varchar;
 struct filter;
 
 byteWriter *newByteWriter(int capacity);

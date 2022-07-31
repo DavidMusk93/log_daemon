@@ -15,6 +15,8 @@ if (uppercase_CMAKE_BUILD_TYPE MATCHES "DEBUG")
     set(EXTERN_LIBS "asan")
 endif ()
 
+#add_definitions(-D_DEBUG=1)
+
 include_directories(.)
 add_executable(${PROJECT_NAME} daemon.c misc.c array.c pubsub.c object.c filter.c packer.c)
 target_link_libraries(${PROJECT_NAME} pthread ${EXTERN_LIBS})

@@ -66,8 +66,7 @@ filter *newTagFilter(const char *tag, int tagLen) {
     r->type = FILTER_TAG;
     r->opType = FILTER_OP_NONE;
 
-    r->tag = makeObject(sizeof(*r->tag) + tagLen, NULL, NULL);
-    memcpy(r->tag->data, tag, tagLen);
+    refVarchar(r->tag, tag, tagLen);
 
     r->fn = &matchTag;
     r->f2 = NULL;
