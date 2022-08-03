@@ -18,3 +18,9 @@ cmake .. && make
 # subscribe message (consumer)
 ./logcat
 ```
+
+# TODO
+
+1. trace `mmap` & `munmap`;
+2. make `arena` shrinkable;
+3. support filter for *pid* & *level*.
