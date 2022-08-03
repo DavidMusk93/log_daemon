@@ -120,10 +120,12 @@ _main() {
             .level=LOG_LEVEL_INFO,
     };
     char tag[] = "filter_test";
-    msg.tag = makeObject(sizeof(*msg.tag) + sizeof(tag) - 1, NULL, NULL);
+    int taglen = (int) sizeof(tag) - 1;
+
+    refVarchar(msg.tag, tag, taglen);
 
     filter *f = newPidFilter(1324);
-    filterOr(f, newTagFilter(tag, sizeof(tag) - 1));
+    filterOr(f, newTagFilter(tag, taglen));
 
     filterResult r = evalFilter(f, &msg);
 
