@@ -17,7 +17,7 @@ refNextQueueEntry(_h)=_h;\
 refPrevQueueEntry(_h)=_h
 
 #define emptyQueue(_h) \
-(prevQueueEntry(_h)==nextQueueEntry(_h))
+((_h)==nextQueueEntry(_h))
 
 #define pushQueue(_h, _e) \
 refPrevQueueEntry(nextQueueEntry(_h))=_e;\
