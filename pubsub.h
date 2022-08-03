@@ -27,6 +27,7 @@
 #define pageSizeAlign(x) ((x+PAGE_SIZE-1)&-PAGE_SIZE)
 
 typedef struct subEntry {
+    queueEntry link;
     int fd;
     int failCount;
     struct filter *f;
@@ -50,10 +51,13 @@ typedef struct pubEntry {
 } pubEntry;
 
 typedef struct peerManager {
-    array freeSubList;
-    sortArray activeSubList;
+    array subFreeList;
+    sortArray subActiveList; /* fast erase */
+    queueEntry subPendingList;
+
     array pubList;
-    ring *ringCache;
+
+    ring *cache;
     queueEntry freeMessageQueue;
     void *messageBuffer;
 } peerManager;

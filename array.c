@@ -18,6 +18,7 @@ ring *newRing(uint32 baseExp2) {
     r->mask = itemCount - 1;
     r->indexProduce = 0;
     r->indexConsume = 0;
+    r->data = (void **) (r + 1);
     return r;
 }
 
@@ -35,14 +36,15 @@ void *popRing(ring *ring) {
         return NULL;
     }
     /* TODO: fix indexConsume<(uint32)-1, indexProduce>0 */
-    if (ring->indexConsume + ring->total <= ring->indexProduce || ring->indexConsume > ring->indexProduce) {
+    if (ring->indexConsume + ring->total <= ring->indexProduce ||
+        ring->indexConsume > ring->indexProduce/*has reset*/) {
         ring->indexConsume = ring->indexProduce - ring->total;
     }
     return ring->data[ring->indexConsume++ & ring->mask];
 }
 
-int isFullRing(ring *ring) {
-    return ring->indexConsume + ring->total == ring->indexProduce;
+int fullRing(ring *ring) {
+    return ring->indexConsume + ring->total == ring->indexProduce; /* loose condition */
 }
 
 void arrayInit(array *o) {
@@ -165,12 +167,12 @@ int sortArrayMakeSlot(sortArray *o, void *hint, void ***linkSlot) {
     return 1;
 }
 
-void initIteratorArray(iteratorArray *o, array *a) {
+void initArrayIterator(arrayIterator *o, array *a) {
     o->array = a;
     o->i = 0;
 }
 
-void *nextElementArray(iteratorArray *o) {
+void *nextArrayElement(arrayIterator *o) {
     if (o->i < o->array->i) {
         return o->array->a[o->i++];
     }
@@ -198,7 +200,7 @@ _main() {
     for (i = 0; i < ARRAYLEN; i++) {
         sortArrayPut(&sa, (void *) (long) rand());
     }
-    iteratorArray it;
+    arrayIterator it;
     arrayIteratorInit(&it, (array *) &sa);
     void *e;
     i = 0;

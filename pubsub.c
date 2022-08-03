@@ -14,22 +14,24 @@
 #include "filter.h"
 
 static int compareSubEntry(const void *l, const void *r) {
-    return *(int *) l - *(int *) r;
+    return ((subEntry *) l)->fd - ((subEntry *) r)->fd;
 }
 
-static int findFreePubEntry(const void *e, void *data) {
-    (void) data;
+static int availablePubEntry(const void *e, void *data) {
+    opList((void), data);
     return ((pubEntry *) e)->flags;
 }
 
 void initPeerManager(peerManager *o) {
-    arrayInit(&o->freeSubList);
-    sortArrayInit(&o->activeSubList, &compareSubEntry);
+    arrayInit(&o->subFreeList);
+    sortArrayInit(&o->subActiveList, &compareSubEntry);
+    initQueue(&o->subPendingList);
+
     arrayInit(&o->pubList);
-    o->ringCache = newRing(RING_BASEEXP2);
+    o->cache = newRing(RING_BASEEXP2);
     initQueue(&o->freeMessageQueue);
 
-    size_t bufSize = o->ringCache->total * sizeof(struct message);
+    size_t bufSize = o->cache->total * sizeof(struct message);
     bufSize = pageSizeAlign(bufSize);
     struct message *msg;
     void *p, *e;
@@ -41,41 +43,57 @@ void initPeerManager(peerManager *o) {
     }
 }
 
+#define unrefMessage(p) \
+unrefObject(((struct message*)(p))->tag);\
+unrefObject(((struct message*)(p))->content)
+
 void freePeerManager(peerManager *o) {
-    iteratorArray it;
+    arrayIterator it;
     void *e;
 
+    /* unref message (tag & content) before munmap its storage */
+    while ((e = popRing(o->cache))) {
+        unrefMessage(e);
+    }
+
     /* TODO: trace memory map & unmap */
-    munmap(o->messageBuffer, pageSizeAlign(o->ringCache->total * sizeof(struct message)));
+    munmap(o->messageBuffer, pageSizeAlign(o->cache->total * sizeof(struct message)));
+    freeRing(o->cache);
 
-    freeRing(o->ringCache);
-
-    initIteratorArray(&it, &o->pubList);
-    while ((e = nextElementArray(&it))) free(e);
+    initArrayIterator(&it, &o->pubList);
+    while ((e = nextArrayElement(&it))) free(e);
     arrayFree(&o->pubList);
 
-    initIteratorArray(&it, (array *) &o->activeSubList);
-    while ((e = nextElementArray(&it))) free(e);
-    sortArrayFree(&o->activeSubList);
+    foreachQueue(&o->subPendingList, entry) {
+        arrayPush(&o->subFreeList, entry); /* delegate reclaim */
+    }
 
-    initIteratorArray(&it, &o->freeSubList);
-    while ((e = nextElementArray(&it))) free(e);
-    arrayFree(&o->freeSubList);
+    initArrayIterator(&it, (array *) &o->subActiveList);
+    while ((e = nextArrayElement(&it))) free(e);
+    sortArrayFree(&o->subActiveList);
+
+    initArrayIterator(&it, &o->subFreeList);
+    while ((e = nextArrayElement(&it))) free(e);
+    arrayFree(&o->subFreeList);
 }
 
 int newSub(peerManager *o, int fd, initLogRequest *req) {
-    subEntry *e = arrayPop(&o->freeSubList);
+    subEntry *e = arrayPop(&o->subFreeList);
     if (!e) {
         e = malloc(sizeof(*e));
         if (!e) return 0;
     }
     e->fd = fd;
     e->failCount = 0;
+    e->f = NULL;
 
-    byteReader r = {req->tag, req->tag + req->len};
-    unpackFilter(&r, &e->f);
+    if (req->len) {
+        byteReader r = {req->tag, req->tag + req->len};
+        unpackFilter(&r, &e->f);
+    }
 
-    return sortArrayPut(&o->activeSubList, e);
+    pushQueue(&o->subPendingList, &e->link);
+    return 1;
 }
 
 void freeSub(peerManager *o, subEntry *e) {
@@ -84,12 +102,12 @@ void freeSub(peerManager *o, subEntry *e) {
         freeFilter(e->f);
     }
 
-    arrayPush(&o->freeSubList, e);
-    sortArrayErase(&o->activeSubList, e);
+    arrayPush(&o->subFreeList, e);
+    sortArrayErase(&o->subActiveList, e);
 }
 
 pubEntry *newPub(peerManager *o, int fd, initLogRequest *req) {
-    pubEntry *e = arrayFind(&o->pubList, &findFreePubEntry, 0);
+    pubEntry *e = arrayFind(&o->pubList, &availablePubEntry, 0);
     if (!e) {
         e = malloc(sizeof(*e));
         arrayPush(&o->pubList, e);
@@ -97,7 +115,7 @@ pubEntry *newPub(peerManager *o, int fd, initLogRequest *req) {
 
     e->fd = fd;
     e->pid = req->pid;
-    e->flags = 0; /*mark inuse*/
+    e->flags = 0; /* mark inuse */
 
     refVarchar(e->tag, req->tag, req->len);
     return e;
@@ -106,13 +124,10 @@ pubEntry *newPub(peerManager *o, int fd, initLogRequest *req) {
 void freePub(peerManager *o, pubEntry *e) {
     opList((void), o);
     close(e->fd);
-    e->flags = 1; /*mark available*/
+    e->flags = 1; /* mark available */
     unrefObject(e->tag);
 }
 
-#define unrefMessage(p) \
-unrefObject(((struct message*)(p))->tag);\
-unrefObject(((struct message*)(p))->content)
 #define MSG_FMT "%u.%06u %d#%d %.*s %s %.*s"
 
 static __thread char messageBuffer[PAGE_SIZE];
@@ -140,56 +155,71 @@ static const char *msgFmt(struct message *msg, int *ptrLen) {
 void postMessage(peerManager *o, struct message *msg) {
     int success, fail;
     array dead;
-    iteratorArray it;
+    arrayIterator it;
     subEntry *sub;
     void *p;
-    const char *msgStr;
-    int msgLen;
+    const char *msgstr;
+    int msglen;
     int state;
-    socklen_t stateLen = sizeof(state);
+    socklen_t statelen = sizeof(state);
     queueEntry *e;
 
-    if (!arraySize(&o->activeSubList)) {
-        cache:
-        log1("No subscribers, push message to RingCache.");
-        if (isFullRing(o->ringCache)) {
-            p = popRing(o->ringCache);
-            unrefMessage(p);
-        } else {
-            popQueue(&o->freeMessageQueue, e);
-            p = e;
-        }
-        *(struct message *) p = *msg;
-        pushRing(o->ringCache, p);
-        return;
-    }
-    p = msg;
-    while ((msg = popRing(o->ringCache))) {
-        initIteratorArray(&it, (array *) &o->activeSubList);
-        msgStr = msgFmt(msg, &msgLen);
-        while ((sub = nextElementArray(&it))) {
-            if ((!sub->f/*all interest*/ || evalFilter(sub->f, msg)/*hit*/) &&
-                write(sub->fd, msgStr, msgLen) != msgLen) {
-                sub->failCount++;
+    /* post cached message to pending subscribers */
+    if (!emptyQueue(&o->subPendingList)) {
+        struct ring cacheview = *o->cache; /* iterator alike */
+        while ((p = popRing(&cacheview))) {
+            msgstr = msgFmt(p, &msglen);
+            foreachQueue(&o->subPendingList, entry) {
+                sub = (void *) entry;
+                if (!sub->f/*all interest*/|| evalFilter(sub->f, msg)/*hit*/) {
+                    write(sub->fd, msgstr, msglen);
+                }
             }
         }
-        pushQueue(&o->freeMessageQueue, &msg->link);
-        unrefMessage(msg);
+
+        /* pending to active */
+        for (;;) {
+            popQueue(&o->subPendingList, e);
+            sortArrayPut(&o->subActiveList, e);
+            if (emptyQueue(&o->subPendingList)) {
+                break;
+            }
+        }
     }
-    msgStr = msgFmt(p, &msgLen);
+
+    /* cache message first */
+    if (fullRing(o->cache)) {
+        p = popRing(o->cache);
+        unrefMessage(p);
+    } else {
+        popQueue(&o->freeMessageQueue, e);
+        p = e;
+    }
+    *(struct message *) p = *msg;
+    pushRing(o->cache, p);
+
+    if (arraySize(&o->subActiveList) == 0) {
+        log1("no subscriber, only cache message");
+        return;
+    }
+
+    /* post this fresh message to all active subscribers */
+    msgstr = msgFmt(msg, &msglen);
     success = fail = 0;
+
     arrayInit(&dead);
-    initIteratorArray(&it, (array *) &o->activeSubList);
-    while ((sub = nextElementArray(&it))) {
-        getsockopt(sub->fd, SOL_SOCKET, SO_ERROR, &state, &stateLen);
-        if (state) { /*sock inactive*/
+    initArrayIterator(&it, (array *) &o->subActiveList);
+
+    while ((sub = nextArrayElement(&it))) {
+        getsockopt(sub->fd, SOL_SOCKET, SO_ERROR, &state, &statelen);
+        if (state) { /* sock inactive */
             arrayPush(&dead, sub);
             continue;
         }
         if (sub->f && !evalFilter(sub->f, p)) { /*not interest*/
             continue;
         }
-        if (write(sub->fd, msgStr, msgLen) == msgLen) {
+        if (write(sub->fd, msgstr, msglen) == msglen) {
             success++;
             sub->failCount = 0;
         } else {
@@ -200,14 +230,8 @@ void postMessage(peerManager *o, struct message *msg) {
         }
     }
 
-    if (success == 0 && fail == 0) {
-        msg = p;
-        goto cache;
-    }
-
-    unrefMessage(p);
-    initIteratorArray(&it, &dead);
-    while ((sub = nextElementArray(&it))) {
+    initArrayIterator(&it, &dead);
+    while ((sub = nextArrayElement(&it))) {
         freeSub(o, sub);
     }
     arrayFree(&dead);

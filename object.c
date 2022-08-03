@@ -88,13 +88,13 @@ arena *newArena() {
 
 void freeArena(void *arena) {
     struct arena *o = arena;
-    struct iteratorArray it;
+    struct arrayIterator it;
     void *p;
 
     munmap(o->slotBufferEnd - ARENA_SLOT_BUFFER_SIZE, ARENA_SLOT_BUFFER_SIZE);
 
-    initIteratorArray(&it, &o->listAllocPoint);
-    while ((p = nextElementArray(&it))) {
+    initArrayIterator(&it, &o->listAllocPoint);
+    while ((p = nextArrayElement(&it))) {
         munmap(p, ARENA_ALLOC_BLOCK_SIZE);
     }
 
